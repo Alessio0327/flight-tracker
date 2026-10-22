@@ -1,0 +1,12 @@
+# Ambiente Python
+.venv/
+__pycache__/
+*.pyc
+
+# Dati locali: prezzi, storico, cache citta'/aeroporti
+data/
+
+# Credenziali del bot Telegram (token + chat id)
+telegram.json
+
+.DS_Store
