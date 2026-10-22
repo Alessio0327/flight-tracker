@@ -1,0 +1,65 @@
+{
+  "andata": {
+    "da": [
+      {
+        "nome": "Roma",
+        "aeroporti": [
+          "FCO"
+        ]
+      }
+    ],
+    "a": [
+      {
+        "nome": "Tokyo",
+        "aeroporti": [
+          "HND",
+          "NRT"
+        ]
+      },
+      {
+        "nome": "Osaka",
+        "aeroporti": [
+          "KIX",
+          "ITM"
+        ]
+      }
+    ]
+  },
+  "ritorno": {
+    "da": [
+      {
+        "nome": "Tokyo",
+        "aeroporti": [
+          "HND",
+          "NRT"
+        ]
+      },
+      {
+        "nome": "Osaka",
+        "aeroporti": [
+          "KIX",
+          "ITM"
+        ]
+      }
+    ],
+    "a": [
+      {
+        "nome": "Roma",
+        "aeroporti": [
+          "FCO"
+        ]
+      }
+    ]
+  },
+  "periodo": {
+    "data": "09/03/2027",
+    "giorni_prima_dopo": 10
+  },
+  "durata": {
+    "min": 14,
+    "max": 21
+  },
+  "max_scali": 1,
+  "top": 5,
+  "frequenza_minuti": 60
+}

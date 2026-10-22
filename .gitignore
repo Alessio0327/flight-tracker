@@ -8,5 +8,6 @@ data/
 
 # Credenziali del bot Telegram (token + chat id)
 telegram.json
+telegram.lock
 
 .DS_Store

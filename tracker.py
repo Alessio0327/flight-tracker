@@ -1,21 +1,25 @@
 """Monitor prezzi voli andata/ritorno su Google Flights.
 
-All'avvio chiede citta' di partenza e destinazione (risolte in aeroporti),
-periodo di partenza, durata, top N e frequenza, poi
-ripete la ricerca ogni N minuti finche' non lo fermi (Ctrl+C).
+All'avvio chiede il tipo di viaggio (ritorno dalla stessa citta' o da un'altra), le
+citta' di andata e ritorno (1 o 2 per lato, risolte in aeroporti), periodo di partenza,
+durata, top N e frequenza, poi ripete la ricerca ogni N minuti finche' non lo fermi
+(Ctrl+C). Confronta l'andata e ritorno sullo stesso biglietto con due biglietti di sola
+andata, per ogni combinazione di citta'.
 
 Ogni giro:
-  1. stima il prezzo di tutte le coppie (data andata, data ritorno) dal calendario
-     prezzi di Google (una richiesta per durata e coppia di aeroporti);
+  1. stima dal calendario prezzi di Google tutte le coppie (andata, ritorno) e tutte
+     le sole andate (una richiesta per coppia di aeroporti, e per durata se A/R);
   2. verifica con la ricerca completa la top attuale e le stime piu' basse (ogni
      ricerca copre tutti gli aeroporti scelti insieme);
-  3. salva prezzi e storico nella cartella dell'istanza (data/<parametri>/);
   3. per la top, apre le pagine di prenotazione e prende il venditore piu' economico
      (le agenzie spesso costano meno del prezzo in lista);
   4. scrive la top N in top.txt e notifica (macOS/Telegram) se il prezzo minimo scende.
 
 Piu' istanze possono girare insieme, ognuna in un terminale: ogni combinazione di
 parametri ha la sua cartella. Rilanciare con gli stessi parametri riprende i dati salvati.
+
+I parametri si possono anche leggere da un file JSON (vedi ricerche/esempio.json):
+all'avvio il tool chiede se rispondere alle domande o indicare il file.
 
 Uso: .venv/bin/python tracker.py
      .venv/bin/python tracker.py --setup-telegram   (attiva notifiche Telegram)
@@ -26,6 +30,7 @@ import csv
 import fcntl
 import html
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -64,8 +69,13 @@ CALENDARIO_URL = (
     "travel.frontend.flights.FlightsFrontendService/GetCalendarGraph"
 )
 MAX_GIORNI_CALENDARIO = 61
+# Limiti di Google Flights, misurati: la ricerca completa accetta voli fino a oggi + 330
+# giorni (conta l'ultimo volo, cioe' il ritorno), il calendario prezzi fino a oggi + 305.
+LIMITE_RICERCA_GIORNI = 330
+LIMITE_CALENDARIO_GIORNI = 305
 ITINERARI_VENDITORI = 4  # itinerari (orari) di cui aprire la pagina di prenotazione, per combinazione
 PAUSA_CALENDARIO = 1
+GIORNI_FUORI_PERIODO = 7  # giorni prima/dopo il periodo in cui cercare date piu' economiche
 
 
 # --- input utente -----------------------------------------------------------
@@ -80,11 +90,11 @@ def chiedi(domanda, converti):
 
 
 def scegli_luogo(luoghi, testo):
-    """Un nome di citta' (o codice IATA) -> (etichetta, [aeroporti]), o None."""
+    """Un nome di citta' (o codice IATA) -> {"nome", "aeroporti"}, o None."""
     codice = testo.upper()
     if codice in luoghi.per_aeroporto and codice not in luoghi.aeroporti:
         citta, nome = luoghi.per_aeroporto[codice]
-        return f"{nome} ({codice})", [codice]
+        return {"nome": nome, "aeroporti": [codice]}
 
     trovate = luoghi.cerca(testo)[:8]
     if not trovate:
@@ -104,20 +114,47 @@ def scegli_luogo(luoghi, testo):
             print(f"  [{i}] {a} {n}")
         scelti = chiedi("  Aeroporti (Invio = tutti, oppure es. 1,2): ", indici(len(aeroporti)))
         aeroporti = [aeroporti[i - 1] for i in scelti] if scelti else aeroporti
-    codici = [a for a, _ in aeroporti]
-    return f"{luoghi.nome_citta(citta)} ({', '.join(codici)})", codici
+    return {"nome": luoghi.nome_citta(citta), "aeroporti": [a for a, _ in aeroporti]}
 
 
-def chiedi_luoghi(luoghi, domanda):
-    """Una o piu' citta' separate da virgola -> {etichetta, aeroporti}."""
-    while True:
-        parti = [x.strip() for x in input(domanda).split(",") if x.strip()]
-        risolti = [scegli_luogo(luoghi, x) for x in parti]
-        if risolti and all(risolti):
-            aeroporti = list(dict.fromkeys(a for _, lista in risolti for a in lista))
-            return {"etichetta": " + ".join(e for e, _ in risolti), "aeroporti": aeroporti}
-        if not parti:
-            print("  scrivi almeno una citta'")
+def chiedi_citta(luoghi, ruolo, default=None):
+    """Una o due citta' (con i loro aeroporti) per un ruolo, es. "partenza dell'andata".
+
+    Con default, Invio alla prima domanda riusa quelle citta'.
+    """
+    suggerimento = f" (Invio = {etichetta(default)})" if default else " (Invio = 1)"
+    n = chiedi(f"Quante citta' di {ruolo}? [1/2]{suggerimento}: ", scelta("", "1", "2"))
+    if not n and default:
+        return default
+    elenco = []
+    for i in range(1, int(n or "1") + 1):
+        while not (c := scegli_luogo(luoghi, input(f"  Citta' di {ruolo}{f' {i}' if n == '2' else ''}: ").strip())):
+            pass
+        elenco.append(c)
+    return elenco
+
+
+def aeroporti(citta):
+    return list(dict.fromkeys(a for c in citta for a in c["aeroporti"]))
+
+
+def etichetta(citta):
+    return " / ".join(f"{c['nome']} ({', '.join(c['aeroporti'])})" for c in citta)
+
+
+def nomi(citta):
+    return "/".join(c["nome"] for c in citta)
+
+
+def citta_ar(p):
+    """Citta' per cui ha senso l'andata e ritorno sullo stesso biglietto.
+
+    Sono quelle di arrivo dell'andata da cui si puo' anche ripartire, se il ritorno
+    arriva dove e' partita l'andata. Lista vuota = solo biglietti di sola andata.
+    """
+    if aeroporti(p["ritorno"]["a"]) != aeroporti(p["andata"]["da"]):
+        return []
+    return [c for c in p["andata"]["a"] if c in p["ritorno"]["da"]]
 
 
 def indici(massimo, default=None):
@@ -175,16 +212,12 @@ def scali(s):
 def scelta(*valori):
     def conv(s):
         if s not in valori:
-            raise ValueError(f"rispondi {' o '.join(valori)}")
+            raise ValueError(f"rispondi {' o '.join(v for v in valori if v)}")
         return s
     return conv
 
 
-def chiedi_parametri():
-    luoghi = Luoghi()
-    p = {}
-    p["origine"] = chiedi_luoghi(luoghi, "Citta' di partenza (es. Roma): ")
-    p["destinazione"] = chiedi_luoghi(luoghi, "Citta' di destinazione (piu' di una separate da virgola, es. Tokyo, Osaka): ")
+def chiedi_periodo():
     modo = chiedi("Periodo di partenza: [1] un mese  [2] intorno a una data: ", scelta("1", "2"))
     if modo == "1":
         inizio, fine = chiedi("Mese (es. 10/2027): ", mese)
@@ -192,9 +225,187 @@ def chiedi_parametri():
         centro = chiedi("Data (es. 15/10/2027): ", data)
         delta = chiedi("Quanti giorni prima/dopo quella data: ", intero(0))
         inizio, fine = centro - timedelta(days=delta), centro + timedelta(days=delta)
+    return max(inizio, date.today() + timedelta(days=1)), fine
+
+
+def voli_in_vendita(client, org, dst, inizio, fine):
+    """Date con almeno un volo di sola andata dal calendario: {data: prezzo minimo}."""
+    trovate = {}
+    da = inizio
+    while da <= fine:
+        a = min(fine, da + timedelta(days=MAX_GIORNI_CALENDARIO - 1))
+        for o in org:
+            for d in dst:
+                for giorno, prezzo in calendario(client, o, d, da.isoformat(), a.isoformat(), None, None).items():
+                    trovate[giorno] = min(prezzo, trovate.get(giorno, prezzo))
+        da = a + timedelta(days=1)
+    return trovate
+
+
+def controlla_periodo(client, p, inizio, fine):
+    """Verifica il periodo sul calendario. Ritorna "ok", "periodo" o "citta" (cosa richiedere)."""
+    lim_ricerca, lim_cal = limite(LIMITE_RICERCA_GIORNI), limite(LIMITE_CALENDARIO_GIORNI)
+    if fine < inizio:
+        print("  Periodo gia' passato.")
+        return "periodo"
+    if inizio > lim_ricerca:
+        print(
+            f"  Google Flights cerca voli solo fino al {lim_ricerca:%d/%m/%Y}: partenze dal "
+            f"{inizio:%d/%m/%Y} non sono ancora cercabili."
+        )
+        scelta_ = chiedi("  [1] cambia periodo  [2] monitora comunque, in attesa che entrino in vendita: ",
+                         scelta("1", "2"))
+        return "periodo" if scelta_ == "1" else "ok"
+    if inizio > lim_cal:
+        print(f"  Il calendario prezzi arriva al {lim_cal:%d/%m/%Y}: non posso verificare in anticipo, "
+              "lo fara' la ricerca completa.")
+        return "ok"
+    fine_cal = min(fine, lim_cal)
+    # Il ritorno parte dopo: si controlla un mese in piu' (la durata non e' ancora nota).
+    lati = [("Andata", p["andata"], inizio, fine_cal)]
+    if p["tipo"] == "diversa":
+        lati.append(("Ritorno", p["ritorno"], inizio, min(fine + timedelta(days=30), lim_cal)))
+    print("  Controllo i voli in vendita...")
+    for nome, lato, da, a in lati:
+        try:
+            trovate = voli_in_vendita(client, aeroporti(lato["da"]), aeroporti(lato["a"]), da, a)
+        except Exception as e:  # noqa: BLE001 - senza verifica si prosegue comunque
+            print(f"  Verifica non riuscita ({e}), proseguo.")
+            return "ok"
+        if not trovate:
+            print(f"  {nome}: nessun volo in vendita da {nomi(lato['da'])} a {nomi(lato['a'])} "
+                  f"tra il {da:%d/%m/%Y} e il {a:%d/%m/%Y}.")
+            scelta_ = chiedi("  Cambia [1] periodo  [2] citta': ", scelta("1", "2"))
+            return "periodo" if scelta_ == "1" else "citta"
+        print(f"  {nome}: voli in {len(trovate)} date su {(a - da).days + 1}, solo andata da {min(trovate.values())} EUR.")
+    if fine > lim_cal:
+        print(f"  Dopo il {lim_cal:%d/%m/%Y} il calendario non vede: quelle date le verifica la ricerca completa.")
+    return "ok"
+
+
+def _leggi_citta(valore, dove):
+    if not isinstance(valore, list) or not 1 <= len(valore) <= 2:
+        raise ValueError(f"{dove}: serve una lista di 1 o 2 citta'")
+    out = []
+    for c in valore:
+        if (not isinstance(c, dict) or not isinstance(c.get("nome"), str)
+                or not isinstance(c.get("aeroporti"), list) or not c["aeroporti"]):
+            raise ValueError(f'{dove}: ogni citta\' e\' {{"nome": "Roma", "aeroporti": ["FCO"]}}')
+        out.append({"nome": c["nome"], "aeroporti": [str(a).upper() for a in c["aeroporti"]]})
+    return out
+
+
+def parametri_da_file(percorso):
+    """Parametri da un file JSON (formato in ricerche/esempio.json). ValueError se non valido."""
+    try:
+        f = json.loads(Path(percorso).expanduser().read_text())
+    except OSError as e:
+        raise ValueError(f"non riesco a leggere il file: {e.strerror}") from None
+    except json.JSONDecodeError as e:
+        raise ValueError(f"JSON non valido (riga {e.lineno}): {e.msg}") from None
+    try:
+        andata = {"da": _leggi_citta(f["andata"]["da"], "andata.da"),
+                  "a": _leggi_citta(f["andata"]["a"], "andata.a")}
+        if f.get("ritorno"):
+            ritorno = {"da": _leggi_citta(f["ritorno"]["da"], "ritorno.da"),
+                       "a": _leggi_citta(f["ritorno"]["a"], "ritorno.a")}
+            tipo = "diversa"
+        else:
+            ritorno, tipo = {"da": andata["a"], "a": andata["da"]}, "stessa"
+        per = f["periodo"]
+        if "mese" in per:
+            inizio, fine = mese(str(per["mese"]))
+        elif "data" in per:
+            centro, delta = data(str(per["data"])), int(per.get("giorni_prima_dopo", 0))
+            inizio, fine = centro - timedelta(days=delta), centro + timedelta(days=delta)
+        else:
+            inizio, fine = data(str(per["dal"])), data(str(per["al"]))
+        inizio = max(inizio, date.today() + timedelta(days=1))
+        p = {
+            "tipo": tipo, "andata": andata, "ritorno": ritorno,
+            "inizio": inizio.isoformat(), "fine": fine.isoformat(),
+            "giorni_min": int(f["durata"]["min"]), "giorni_max": int(f["durata"]["max"]),
+            "max_scali": None if f.get("max_scali") is None else int(f["max_scali"]),
+            "top": int(f.get("top", 5)), "frequenza_minuti": int(f.get("frequenza_minuti", 30)),
+        }
+    except KeyError as e:
+        raise ValueError(f"manca il campo {e}") from None
+    except (TypeError, AttributeError):
+        raise ValueError("struttura non valida: confronta il file con ricerche/esempio.json") from None
+    if fine < inizio:
+        raise ValueError("periodo vuoto o gia' passato")
+    if not 1 <= p["giorni_min"] <= p["giorni_max"]:
+        raise ValueError("durata: serve 1 <= min <= max")
+    if p["top"] < 1 or p["frequenza_minuti"] < 1 or (p["max_scali"] or 0) < 0:
+        raise ValueError("top e frequenza_minuti devono essere >= 1, max_scali >= 0")
+    return p
+
+
+def chiedi_file():
+    def conv(s):
+        # Un file trascinato nel Terminale arriva con spazi protetti o tra apici.
+        s = s.strip().strip("'\"").replace("\\ ", " ")
+        if not s:
+            raise ValueError("scrivi il percorso del file")
+        return parametri_da_file(s)
+    p = chiedi("Percorso del file JSON: ", conv)
+    scali_txt = {None: "scali qualsiasi", 0: "solo diretti", 1: "max 1 scalo"}.get(p["max_scali"], f"max {p['max_scali']} scali")
+    print(f"  Andata {etichetta(p['andata']['da'])} -> {etichetta(p['andata']['a'])}\n"
+          f"  Ritorno {etichetta(p['ritorno']['da'])} -> {etichetta(p['ritorno']['a'])}\n"
+          f"  Partenza dal {date.fromisoformat(p['inizio']):%d/%m/%Y} al {date.fromisoformat(p['fine']):%d/%m/%Y}, "
+          f"durata {p['giorni_min']}-{p['giorni_max']} giorni, {scali_txt}, top {p['top']}, "
+          f"ogni {p['frequenza_minuti']} min")
+    return p
+
+
+def chiedi_parametri():
+    if chiedi("Parametri: [1] rispondo alle domande  [2] leggo da un file JSON (Invio = 1): ",
+              scelta("", "1", "2")) == "2":
+        return chiedi_file()
+    luoghi = Luoghi()
+    client = nuovo_client()
+    p = {}
+    print(
+        f"Date cercabili: partenza da domani, ultimo volo entro il {limite(LIMITE_RICERCA_GIORNI):%d/%m/%Y} "
+        f"(limite di Google Flights, oggi + {LIMITE_RICERCA_GIORNI} giorni).\n"
+    )
+    while True:
+        p["tipo"] = {"1": "stessa", "2": "diversa"}[chiedi(
+            "Tipo di viaggio: [1] andata e ritorno sulla stessa citta'  [2] ritorno da un'altra citta': ",
+            scelta("1", "2"),
+        )]
+        print("ANDATA")
+        andata = {"da": chiedi_citta(luoghi, "partenza"), "a": chiedi_citta(luoghi, "arrivo")}
+        if p["tipo"] == "stessa":
+            ritorno = {"da": andata["a"], "a": andata["da"]}
+        else:
+            print("RITORNO")
+            ritorno = {
+                "da": chiedi_citta(luoghi, "partenza del ritorno", default=andata["a"]),
+                "a": chiedi_citta(luoghi, "arrivo del ritorno", default=andata["da"]),
+            }
+        p["andata"], p["ritorno"] = andata, ritorno
+        while (esito := controlla_periodo(client, p, *(periodo := chiedi_periodo()))) == "periodo":
+            pass
+        if esito == "ok":
+            break
+    inizio, fine = periodo
     p["inizio"], p["fine"] = inizio.isoformat(), fine.isoformat()
-    p["giorni_min"] = chiedi("Durata minima viaggio (giorni): ", intero(1))
-    p["giorni_max"] = chiedi("Durata massima viaggio (giorni): ", intero(p["giorni_min"]))
+    while True:
+        p["giorni_min"] = chiedi("Durata minima viaggio (giorni): ", intero(1))
+        p["giorni_max"] = chiedi("Durata massima viaggio (giorni): ", intero(p["giorni_min"]))
+        tot, ora = len(chiavi(p, anche_future=True)), len(chiavi(p))
+        if ora == tot:
+            break
+        print(f"  {tot - ora} ricerche su {tot} riguardano voli dopo il "
+              f"{limite(LIMITE_RICERCA_GIORNI):%d/%m/%Y}: le faccio man mano che diventano possibili.")
+        if ora == 0:
+            primo = min(ultima_data(k) for k in chiavi(p, anche_future=True))
+            print(f"  Per ora nessuna e' cercabile: la prima lo diventa il "
+                  f"{primo - timedelta(days=LIMITE_RICERCA_GIORNI):%d/%m/%Y}.")
+            if chiedi("  [1] cambia durata  [2] monitora comunque: ", scelta("1", "2")) == "1":
+                continue
+        break
     p["max_scali"] = chiedi("Massimo scali per tratta (0 = solo diretti, Invio = qualsiasi): ", scali)
     p["top"] = chiedi("Quanti migliori risultati mostrare: ", intero(1))
     p["frequenza_minuti"] = chiedi("Frequenza aggiornamento (minuti): ", intero(1))
@@ -203,16 +414,86 @@ def chiedi_parametri():
 
 # --- ricerca -----------------------------------------------------------------
 
-def combinazioni(p):
-    """Tutte le coppie "andata|ritorno" che rispettano i parametri."""
-    inizio, fine = date.fromisoformat(p["inizio"]), date.fromisoformat(p["fine"])
-    andata = max(inizio, date.today() + timedelta(days=1))
+def limite(giorni):
+    return date.today() + timedelta(days=giorni)
+
+
+def _giorni(da, a):
+    while da <= a:
+        yield da
+        da += timedelta(days=1)
+
+
+def finestra_partenze(p):
+    return max(date.fromisoformat(p["inizio"]), date.today() + timedelta(days=1)), date.fromisoformat(p["fine"])
+
+
+def finestra_ritorni(p):
+    inizio, fine = finestra_partenze(p)
+    return inizio + timedelta(days=p["giorni_min"]), fine + timedelta(days=p["giorni_max"])
+
+
+def periodo_allargato(p):
+    """Parametri con il periodo di partenza allargato di GIORNI_FUORI_PERIODO per lato."""
+    giorni = timedelta(days=GIORNI_FUORI_PERIODO)
+    return {**p, "inizio": (date.fromisoformat(p["inizio"]) - giorni).isoformat(),
+            "fine": (date.fromisoformat(p["fine"]) + giorni).isoformat()}
+
+
+def fuori_periodo(p, x):
+    return not p["inizio"] <= x["andata"] <= p["fine"]
+
+
+def combinazioni(p, anche_future=False):
+    """Coppie "andata|ritorno" per l'andata e ritorno sullo stesso biglietto.
+
+    Senza anche_future: solo quelle gia' cercabili (ritorno entro il limite di Google).
+    Ogni giorno il limite avanza e se ne aggiungono altre.
+    """
+    if not citta_ar(p):
+        return []
     out = []
-    while andata <= fine:
+    for andata in _giorni(*finestra_partenze(p)):
         for durata in range(p["giorni_min"], p["giorni_max"] + 1):
-            out.append(f"{andata.isoformat()}|{(andata + timedelta(days=durata)).isoformat()}")
-        andata += timedelta(days=1)
+            ritorno = andata + timedelta(days=durata)
+            if anche_future or ritorno <= limite(LIMITE_RICERCA_GIORNI):
+                out.append(f"{andata.isoformat()}|{ritorno.isoformat()}")
     return out
+
+
+def sole_andate(p, anche_future=False):
+    """Voli di sola andata da cercare: "out|<citta' di arrivo>|data" e "ret|<citta' di partenza>|data"."""
+    out = []
+    for lato, citta, finestra in (("out", p["andata"]["a"], finestra_partenze(p)),
+                                  ("ret", p["ritorno"]["da"], finestra_ritorni(p))):
+        for c in citta:
+            for giorno in _giorni(*finestra):
+                if anche_future or giorno <= limite(LIMITE_RICERCA_GIORNI):
+                    out.append(f"{lato}|{c['nome']}|{giorno.isoformat()}")
+    return out
+
+
+def chiavi(p, anche_future=False):
+    """Tutte le ricerche precise: andate e ritorni sullo stesso biglietto + sole andate."""
+    return combinazioni(p, anche_future) + sole_andate(p, anche_future)
+
+
+def ultima_data(k):
+    return date.fromisoformat(k.split("|")[-1])
+
+
+def citta_per_nome(p, lato, nome):
+    elenco = p["andata"]["a"] if lato == "out" else p["ritorno"]["da"]
+    return next(c for c in elenco if c["nome"] == nome)
+
+
+def tratta_sola_andata(p, k):
+    """(giorno, aeroporti di partenza, aeroporti di arrivo) per una chiave di sola andata."""
+    lato, nome, giorno = k.split("|")
+    c = citta_per_nome(p, lato, nome)
+    if lato == "out":
+        return giorno, aeroporti(p["andata"]["da"]), c["aeroporti"]
+    return giorno, c["aeroporti"], aeroporti(p["ritorno"]["a"])
 
 
 def _varint(n):
@@ -292,8 +573,17 @@ class Ritmo:
 
 def cerca(client, org, dst, andata, ritorno, max_scali=None):
     """Volo A/R piu' economico tra tutti gli aeroporti, o None se non in vendita."""
-    base = create_query(flights=[], trip="round-trip", passengers=Passengers(adults=1))
-    tfs = b64encode(base.to_bytes() + _tratta(andata, org, dst, max_scali) + _tratta(ritorno, dst, org, max_scali)).decode()
+    return _cerca(client, "round-trip", [(andata, org, dst), (ritorno, dst, org)], max_scali)
+
+
+def cerca_sola_andata(client, giorno, org, dst, max_scali=None):
+    """Volo di sola andata piu' economico tra tutti gli aeroporti, o None."""
+    return _cerca(client, "one-way", [(giorno, org, dst)], max_scali)
+
+
+def _cerca(client, viaggio, tratte, max_scali):
+    base = create_query(flights=[], trip=viaggio, passengers=Passengers(adults=1))
+    tfs = b64encode(base.to_bytes() + b"".join(_tratta(g, da, a, max_scali) for g, da, a in tratte)).decode()
     params = {"tfs": tfs, "hl": "it", "curr": "EUR"}
     link = f"{URL}/search?tfs={tfs}&hl=it&curr=EUR"
     r = client.get(URL, params=params)
@@ -370,8 +660,8 @@ def prezzo_venditori(cercatore, p, andata, ritorno):
     Usa la libreria fli (GetShoppingResults + GetBookingResults).
     """
     try:
-        org = [[FliAirport[a], 0] for a in p["origine"]["aeroporti"]]
-        dst = [[FliAirport[a], 0] for a in p["destinazione"]["aeroporti"]]
+        org = [[FliAirport[a], 0] for a in aeroporti(p["andata"]["da"])]
+        dst = [[FliAirport[a], 0] for a in aeroporti(citta_ar(p))]
     except KeyError:
         return None  # aeroporto sconosciuto a fli
     stops = {None: MaxStops.ANY, 0: MaxStops.NON_STOP, 1: MaxStops.ONE_STOP_OR_FEWER}.get(
@@ -425,12 +715,13 @@ def giudizio(v):
 
 
 def calendario(client, org, dst, da, a, durata, max_scali):
-    """Prezzi stimati A/R per ogni partenza tra da e a (max 61 giorni), durata fissa.
+    """Prezzi stimati per ogni partenza tra da e a (max 61 giorni).
 
+    Con durata: A/R di durata fissa, ritorna {"andata|ritorno": prezzo}.
+    Con durata None: solo andata, ritorna {"andata": prezzo}.
     Usa GetCalendarGraph, l'API interna del grafico prezzi di Google Flights:
     una richiesta copre tutte le date. Formato ricavato dalla libreria `fli`
     (github.com/punitarani/fli), non documentato da Google.
-    Ritorna {"andata|ritorno": prezzo}.
     """
     stops = {None: 0, 0: 1, 1: 2, 2: 3}.get(max_scali, 0)
 
@@ -438,14 +729,19 @@ def calendario(client, org, dst, da, a, durata, max_scali):
         return [[[[da_aer, 0]]], [[[a_aer, 0]]], None, stops, None, None, giorno,
                 None, None, None, None, None, None, None, tipo]
 
-    ritorno = (date.fromisoformat(da) + timedelta(days=durata)).isoformat()
+    if durata is None:
+        tipo_viaggio, segmenti, durate = 2, [segmento(org, dst, da, 3)], []
+    else:
+        ritorno = (date.fromisoformat(da) + timedelta(days=durata)).isoformat()
+        tipo_viaggio = 1
+        segmenti = [segmento(org, dst, da, 3), segmento(dst, org, ritorno, 1)]
+        durate = [None, [durata, durata]]
     filtri = [
         None,
-        [None, None, 1, None, [], 1, [1, 0, 0, 0], None, None, None, None, None, None,
-         [segmento(org, dst, da, 3), segmento(dst, org, ritorno, 1)], None, None, None, 1],
+        [None, None, tipo_viaggio, None, [], 1, [1, 0, 0, 0], None, None, None, None, None, None,
+         segmenti, None, None, None, 1],
         [da, a],
-        None,
-        [durata, durata],
+        *durate,
     ]
     corpo = "f.req=" + urllib.parse.quote(
         json.dumps([None, json.dumps(filtri, separators=(",", ":"))], separators=(",", ":"))
@@ -466,49 +762,94 @@ def calendario(client, org, dst, da, a, durata, max_scali):
                 continue
             for item in json.loads(chunk[2])[-1] or []:
                 try:
-                    out[f"{item[0]}|{item[1]}"] = item[2][0][1]
+                    out[item[0] if durata is None else f"{item[0]}|{item[1]}"] = item[2][0][1]
                 except (IndexError, TypeError):
                     continue
     return out
 
 
-def scansione_calendario(client, p, ritmo):
-    """Stime per tutte le combinazioni: una chiamata per coppia di aeroporti e durata.
+def _finestre(da, a):
+    a = min(a, limite(LIMITE_CALENDARIO_GIORNI))
+    while da <= a:
+        yield da, min(a, da + timedelta(days=MAX_GIORNI_CALENDARIO - 1))
+        da += timedelta(days=MAX_GIORNI_CALENDARIO)
 
-    Una chiamata per coppia, non tutti gli aeroporti insieme: con piu' aeroporti
-    (es. KIX+ITM+UKB) il calendario restituisce quasi sempre un solo risultato.
+
+def scansione_calendario(client, p, ritmo):
+    """Stime dal calendario per tutte le ricerche, con le stesse chiavi di chiavi(p).
+
+    Una chiamata per coppia di aeroporti (e durata, per l'A/R), non tutti gli aeroporti
+    insieme: con piu' aeroporti (es. KIX+ITM+UKB) il calendario restituisce quasi
+    sempre un solo risultato.
     """
-    inizio = max(date.fromisoformat(p["inizio"]), date.today() + timedelta(days=1))
-    fine = date.fromisoformat(p["fine"])
-    finestre = []
-    while inizio <= fine:
-        finestre.append((inizio, min(fine, inizio + timedelta(days=MAX_GIORNI_CALENDARIO - 1))))
-        inizio += timedelta(days=MAX_GIORNI_CALENDARIO)
-    chiamate = [
-        (o, d, da, a, durata)
-        for o in p["origine"]["aeroporti"]
-        for d in p["destinazione"]["aeroporti"]
-        for da, a in finestre
-        for durata in range(p["giorni_min"], p["giorni_max"] + 1)
-    ]
+    chiamate = []  # (prefisso chiave o None per A/R, partenza, arrivo, da, a, durata)
+    if citta_ar(p):
+        for da, a in _finestre(*finestra_partenze(p)):
+            for o in aeroporti(p["andata"]["da"]):
+                for d in aeroporti(citta_ar(p)):
+                    for durata in range(p["giorni_min"], p["giorni_max"] + 1):
+                        chiamate.append((None, o, d, da, a, durata))
+    for c in p["andata"]["a"]:
+        for da, a in _finestre(*finestra_partenze(p)):
+            for o in aeroporti(p["andata"]["da"]):
+                for d in c["aeroporti"]:
+                    chiamate.append((f"out|{c['nome']}|", o, d, da, a, None))
+    for c in p["ritorno"]["da"]:
+        for da, a in _finestre(*finestra_ritorni(p)):
+            for o in c["aeroporti"]:
+                for d in aeroporti(p["ritorno"]["a"]):
+                    chiamate.append((f"ret|{c['nome']}|", o, d, da, a, None))
     print()
     stime, errori = {}, 0
     with Barra("Calendario", len(chiamate)) as barra:
-        for o, d, da, a, durata in chiamate:
+        for prefisso, o, d, da, a, durata in chiamate:
             try:
                 for k, prezzo in calendario(client, o, d, da.isoformat(), a.isoformat(), durata, p["max_scali"]).items():
+                    k = (prefisso or "") + k
                     stime[k] = min(prezzo, stime.get(k, prezzo))
             except Bloccato:
                 raise
             except Exception as e:  # noqa: BLE001 - senza calendario si usa solo la ricerca precisa
                 errori += 1
-                barra.scrivi(f"[errore calendario] {o}-{d} {durata} gg: {e}")
+                barra.scrivi(f"[errore calendario] {o}-{d}: {e}")
                 if errori >= 5:
                     barra.scrivi("[stop calendario] troppi errori, continuo con la ricerca precisa")
                     break
-            barra.avanza(f"{len(stime)} date stimate" + (f", da {min(stime.values())} EUR" if stime else ""))
+            barra.avanza(f"{len(stime)} prezzi stimati")
             time.sleep(ritmo.pausa_calendario())
     return stime
+
+
+def proposte(p, prezzi_di):
+    """Viaggi completi con il loro prezzo, dal piu' economico.
+
+    prezzi_di: {chiave: prezzo} (prezzi verificati o stime). Ogni proposta e'
+    {"prezzo", "tipo": "ar"|"2b", "andata", "ritorno", "chiavi", "va", "torna"}
+    (va/torna = nomi delle citta' di arrivo dell'andata e di partenza del ritorno).
+    """
+    out = []
+    nome_ar = nomi(citta_ar(p))
+    for k in combinazioni(p):
+        if prezzi_di.get(k):
+            andata, ritorno = k.split("|")
+            out.append({"prezzo": prezzi_di[k], "tipo": "ar", "andata": andata, "ritorno": ritorno,
+                        "chiavi": [k], "va": nome_ar, "torna": nome_ar})
+    for x in p["andata"]["a"]:
+        for y in p["ritorno"]["da"]:
+            if p["tipo"] == "stessa" and x["nome"] != y["nome"]:
+                continue
+            for andata in _giorni(*finestra_partenze(p)):
+                k_out = f"out|{x['nome']}|{andata.isoformat()}"
+                if not prezzi_di.get(k_out):
+                    continue
+                for durata in range(p["giorni_min"], p["giorni_max"] + 1):
+                    ritorno = (andata + timedelta(days=durata)).isoformat()
+                    k_ret = f"ret|{y['nome']}|{ritorno}"
+                    if prezzi_di.get(k_ret):
+                        out.append({"prezzo": prezzi_di[k_out] + prezzi_di[k_ret], "tipo": "2b",
+                                    "andata": andata.isoformat(), "ritorno": ritorno,
+                                    "chiavi": [k_out, k_ret], "va": x["nome"], "torna": y["nome"]})
+    return sorted(out, key=lambda x: x["prezzo"])
 
 
 def notifica(titolo, testo):
@@ -517,7 +858,22 @@ def notifica(titolo, testo):
         subprocess.run(["osascript", "-e", script], check=False)
 
 
-def giro(p, cartella, client, ritmo):
+def citta_da_tratte(p, tratte):
+    """Citta' di arrivo dell'andata, dall'ultimo aeroporto delle tratte (es. "FCO-ICN ICN-KIX")."""
+    arrivo = tratte.split()[-1].split("-")[-1] if tratte else ""
+    return next((c["nome"] for c in citta_ar(p) if arrivo in c["aeroporti"]), nomi(citta_ar(p)))
+
+
+def proposte_verificate(p, prezzi):
+    """Proposte con soli prezzi verificati; per l'A/R la citta' viene dalle tratte trovate."""
+    out = proposte(p, {k: migliore(v) for k, v in prezzi.items() if migliore(v)})
+    for x in out:
+        if x["tipo"] == "ar":
+            x["va"] = x["torna"] = citta_da_tratte(p, prezzi[x["chiavi"][0]].get("tratte"))
+    return out
+
+
+def giro(p, cartella, client, ritmo, primo=False):
     """Un giro di ricerche. Ritorna (motivo del blocco o None, messaggio Telegram o None)."""
     prezzi_path = cartella / "prezzi.json"
     try:
@@ -525,88 +881,116 @@ def giro(p, cartella, client, ritmo):
     except FileNotFoundError:
         prezzi = {}
 
-    tutte = combinazioni(p)
+    tutte = chiavi(p)
     valide = set(tutte)
     prezzi = {k: v for k, v in prezzi.items() if k in valide}  # date ormai passate
 
-    # 1. Stima veloce di tutte le combinazioni dal calendario prezzi.
+    # 1. Stima veloce di tutte le ricerche dal calendario prezzi. Il calendario guarda
+    #    anche qualche giorno prima e dopo il periodo: una richiesta copre fino a 61 giorni,
+    #    quindi di solito non costa richieste in piu'.
+    largo = periodo_allargato(p)
     bloccato = None
     try:
-        stime = {k: v for k, v in scansione_calendario(client, p, ritmo).items() if k in valide}
+        stime_larghe = scansione_calendario(client, largo, ritmo)
     except Bloccato as e:
-        bloccato, stime = str(e), {}
+        bloccato, stime_larghe = str(e), {}
+    stime = {k: v for k, v in stime_larghe.items() if k in valide}
 
-    # 2. Ricerca precisa: top attuale, poi le stime piu' basse, poi a rotazione tutte
-    #    le altre (mai verificate prima). La rotazione serve: il calendario non vede
-    #    tutte le tariffe (es. China Eastern 751 EUR stimata 833), quindi una stima
-    #    alta non basta per scartare una combinazione.
+    # 2. Ricerca precisa: le ricerche della top attuale, poi quelle dei viaggi con la
+    #    stima piu' bassa, poi a rotazione tutte le altre (mai verificate prima). La
+    #    rotazione serve: il calendario non vede tutte le tariffe (es. China Eastern
+    #    751 EUR stimata 833), quindi una stima alta non basta per scartare una ricerca.
     budget = ritmo.budget(p["frequenza_minuti"]) if not bloccato else 0
-    note = sorted((k for k in prezzi if migliore(prezzi[k])), key=lambda k: migliore(prezzi[k]))
-    da_fare = note[: min(p["top"], budget // 2)]
-    da_fare += [k for k in sorted(stime, key=stime.get) if k not in da_fare][:VERIFICA_DA_STIMA]
+    verificate_prima = proposte_verificate(p, prezzi)
+    da_fare, motivo = [], {}
+
+    def aggiungi(k, perche):
+        if k not in motivo:
+            da_fare.append(k)
+            motivo[k] = perche
+
+    for x in verificate_prima[: p["top"]]:
+        for k in x["chiavi"]:
+            if len(da_fare) < budget // 2:
+                aggiungi(k, "top")
+    for x in proposte(p, stime):
+        if sum(1 for m in motivo.values() if m == "stima") >= VERIFICA_DA_STIMA:
+            break
+        for k in x["chiavi"]:
+            aggiungi(k, "stima")
     da_fare = da_fare[:budget]
-    rotazione = sorted(
-        (k for k in tutte if k not in da_fare),
-        key=lambda k: prezzi.get(k, {}).get("controllato", ""),
-    )
-    da_fare += rotazione[: budget - len(da_fare)]
-    motivo = {k: "top" if k in note[: p["top"]] else "stima" if k in stime and k not in rotazione else "rotazione"
-              for k in da_fare}
+    for k in sorted((k for k in tutte if k not in motivo), key=lambda k: prezzi.get(k, {}).get("controllato", "")):
+        if len(da_fare) >= budget:
+            break
+        aggiungi(k, "rotazione")
+    # Fuori periodo: verifico solo la proposta stimata piu' economica, e solo se costa
+    # meno del meglio nel periodo (1-2 ricerche in piu').
+    chiavi_fuori = []
+    dentro = [x["prezzo"] for x in verificate_prima[:1] + proposte(p, stime)[:1]]
+    fuori = next((x for x in proposte(largo, stime_larghe) if fuori_periodo(p, x)), None)
+    if budget and fuori and (not dentro or fuori["prezzo"] < min(dentro)):
+        chiavi_fuori = fuori["chiavi"]
+        for k in chiavi_fuori:
+            aggiungi(k, "fuori periodo")
     if da_fare:
-        conta = {m: sum(1 for k in da_fare if motivo[k] == m) for m in ("top", "stima", "rotazione")}
+        conta = {m: sum(1 for k in da_fare if motivo[k] == m)
+                 for m in ("top", "stima", "rotazione", "fuori periodo")}
         print(
-            f"\nVerifica precisa: {len(da_fare)} combinazioni "
-            f"(top attuale {conta['top']}, stime migliori {conta['stima']}, a rotazione {conta['rotazione']})"
+            f"\nVerifica precisa: {len(da_fare)} ricerche "
+            f"(top attuale {conta['top']}, stime migliori {conta['stima']}, a rotazione {conta['rotazione']}"
+            + (f", fuori periodo {conta['fuori periodo']}" if conta["fuori periodo"] else "") + ")"
         )
 
-    record_prima = migliore(prezzi[note[0]]) if note else None
+    record_prima = verificate_prima[0]["prezzo"] if verificate_prima else None
+    minimo = record_prima
     adesso = datetime.now().isoformat(timespec="seconds")
     errori = 0
     with open(cartella / "storico.csv", "a", newline="") as f, Barra("Verifica", len(da_fare)) as barra:
         storico = csv.writer(f)
         for k in da_fare:
-            andata, ritorno = k.split("|")
-            minimo = min((migliore(v) for v in prezzi.values() if migliore(v)), default=None)
             try:
-                ris = cerca(
-                    client, p["origine"]["aeroporti"], p["destinazione"]["aeroporti"],
-                    andata, ritorno, p["max_scali"],
-                )
+                if k.count("|") == 1:
+                    andata, ritorno = k.split("|")
+                    ris = cerca(client, aeroporti(p["andata"]["da"]), aeroporti(citta_ar(p)),
+                                andata, ritorno, p["max_scali"])
+                else:
+                    giorno, org, dst = tratta_sola_andata(largo, k)
+                    ris = cerca_sola_andata(client, giorno, org, dst, p["max_scali"])
             except Bloccato as e:
                 bloccato = str(e)
                 break
             except Exception as e:  # noqa: BLE001 - un errore non deve fermare il giro
                 errori += 1
-                barra.scrivi(f"[errore] {andata} -> {ritorno}: {e}")
+                barra.scrivi(f"[errore] {k}: {e}")
                 if errori >= 5:
                     bloccato = "5 errori di fila, probabile limitazione"
                     break
                 barra.avanza()
                 continue
             errori = 0
-            if ris and (minimo is None or ris["prezzo"] < minimo):
-                barra.scrivi(
-                    f"★ nuovo minimo: {ris['prezzo']} EUR  {andata} -> {ritorno}  "
-                    f"{ris['compagnie']} [{ris['tratte']}]"
-                )
-            if ris:
-                minimo = ris["prezzo"] if minimo is None else min(minimo, ris["prezzo"])
-            barra.avanza(f"minimo {minimo} EUR" if minimo else "")
             # Il venditore resta finche' la fase 3 non lo ricontrolla.
             prezzi[k] = {**(ris or {"prezzo": None}), "controllato": adesso,
                          "venditore": prezzi.get(k, {}).get("venditore") if ris else None}
             if ris:
-                storico.writerow([adesso, andata, ritorno, ris["prezzo"], ris["compagnie"], ris["tratte"]])
+                a, b = k.split("|") if k.count("|") == 1 else (k.split("|")[2], k.rsplit("|", 1)[0])
+                storico.writerow([adesso, a, b, ris["prezzo"], ris["compagnie"], ris["tratte"]])
                 f.flush()
+                meglio = proposte_verificate(p, prezzi)
+                if meglio and (minimo is None or meglio[0]["prezzo"] < minimo):
+                    minimo = meglio[0]["prezzo"]
+                    barra.scrivi(f"★ nuovo minimo: {riassunto(meglio[0])}")
+            barra.avanza(f"minimo {minimo} EUR" if minimo else "")
             # Salva subito: Ctrl+C a meta' giro non perde le ricerche fatte.
             prezzi_path.write_text(json.dumps(prezzi, indent=1, ensure_ascii=False))
             time.sleep(ritmo.pausa())
-    # 3. Venditori: per la top, prezzi di agenzie e compagnia nelle pagine di prenotazione.
+
+    # 3. Venditori: per gli A/R in top, prezzi di agenzie e compagnia nelle pagine di
+    #    prenotazione (per la sola andata fli non restituisce i venditori).
     if not bloccato:
-        candidati = sorted((k for k in prezzi if migliore(prezzi[k])), key=lambda k: migliore(prezzi[k]))[: p["top"]]
-        minimo = migliore(prezzi[candidati[0]]) if candidati else None
+        candidati = [x["chiavi"][0] for x in proposte_verificate(p, prezzi)[: p["top"]] if x["tipo"] == "ar"]
         cercatore, errori = SearchFlights(), 0
-        print(f"\nPrezzi dei venditori (agenzie comprese) per la top {len(candidati)}")
+        if candidati:
+            print(f"\nPrezzi dei venditori (agenzie comprese) per {len(candidati)} A/R in top")
         with open(cartella / "storico.csv", "a", newline="") as f, Barra("Venditori", len(candidati)) as barra:
             storico = csv.writer(f)
             for k in candidati:
@@ -635,67 +1019,218 @@ def giro(p, cartella, client, ritmo):
     if bloccato:
         print(f"[blocco] Google limita le richieste: {bloccato}. Giro interrotto.")
 
-    top = sorted((k for k in prezzi if migliore(prezzi[k])), key=lambda k: migliore(prezzi[k]))[: p["top"]]
-    tratta = f"{p['origine']['etichetta']} -> {p['destinazione']['etichetta']}"
+    tutte_proposte = proposte_verificate(p, prezzi)
+    top = tutte_proposte[: p["top"]]
+    tratta = nome_tratta(p)
     scali_txt = {None: "scali qualsiasi", 0: "solo diretti", 1: "max 1 scalo"}.get(
         p["max_scali"], f"max {p['max_scali']} scali"
     )
-    stimate = len(valide & (set(stime) | set(prezzi)))
-    verificate = len(valide & set(prezzi))
-    copertura = (
-        f"stimate {stimate}/{len(valide)} combinazioni, "
-        f"verificate col prezzo completo {verificate}/{len(valide)}"
-        + (" (scansione completa)" if verificate == len(valide) else " (scansione in corso)")
-    )
+    cop = {
+        "totale": len(valide),
+        "stimate": len(valide & (set(stime) | set(prezzi))),
+        "verificate": len(valide & set(prezzi)),
+        "budget": ritmo.budget(p["frequenza_minuti"]),
+        "future": len(chiavi(p, anche_future=True)) - len(valide),
+        "migliori": 0,
+    }
+    if cop["verificate"] < cop["totale"]:
+        # Le stime piu' basse del calendario vengono verificate per prime: lo dico, cosi'
+        # una scansione parziale non sembra un risultato incompleto.
+        for x in proposte(p, stime)[:VERIFICA_DA_STIMA]:
+            if not all(k in prezzi for k in x["chiavi"]):
+                break
+            cop["migliori"] += 1
+    copertura = testo_copertura(cop)
     righe = [
         f"Top {len(top)} {tratta}, partenza {p['inizio']} .. {p['fine']}, "
         f"{p['giorni_min']}-{p['giorni_max']} giorni, {scali_txt} (aggiornato {adesso})",
         copertura[0].upper() + copertura[1:],
         "",
     ]
-    for i, k in enumerate(top, 1):
-        v = prezzi[k]
-        andata, ritorno = k.split("|")
-        giorni = (date.fromisoformat(ritorno) - date.fromisoformat(andata)).days
-        righe.append(
-            f"{i}. {descrivi_prezzo(v)}  {andata} -> {ritorno} ({giorni} gg)  "
-            f"{v['compagnie']}  [{v['tratte']}]  visto {v['controllato']}\n"
-            + (f"   Prezzo {giudizio(v)}\n" if giudizio(v) else "")
-            + f"   {v['link']}"
-        )
+    for i, x in enumerate(top, 1):
+        righe.append(f"{i}. " + dettaglio(x, prezzi))
     if not top:
         righe.append("Nessun prezzo ancora: date forse non in vendita.")
+    confronto = confronto_varianti(p, tutte_proposte, proposte(p, stime))
+    righe += ["", *confronto]
+    consiglio = suggerimento(p, largo, prezzi, chiavi_fuori, top)
+    if consiglio:
+        righe += ["", *consiglio]
     testo = "\n".join(righe)
     (cartella / "top.txt").write_text(testo + "\n")
     print("\n" + "=" * 80 + "\n" + testo)
 
-    if top and (record_prima is None or migliore(prezzi[top[0]]) < record_prima):
-        andata, ritorno = top[0].split("|")
-        etichetta = giudizio(prezzi[top[0]]).split(":")[0]
-        notifica(
-            f"Volo {tratta}: nuovo minimo",
-            f"{migliore(prezzi[top[0]])} EUR {andata} -> {ritorno}" + (f" ({etichetta})" if etichetta else ""),
+    nuovo = top and (record_prima is None or top[0]["prezzo"] < record_prima)
+    if nuovo:
+        notifica(f"Volo {tratta}: nuovo minimo", riassunto(top[0]))
+    # Al primo giro di ogni avvio la top completa arriva comunque, anche se i prezzi
+    # vengono da un'esecuzione precedente.
+    if nuovo or (primo and top):
+        titolo = "✈️ <b>Nuovo prezzo minimo</b>" if nuovo else "🚀 <b>Tracker avviato</b>: prezzi migliori attuali"
+        return bloccato, messaggio_telegram(p, top, prezzi, cop, confronto + ([""] + consiglio if consiglio else []),
+                                            titolo)
+    # Nessun nuovo minimo: messaggio breve, cosi' su Telegram si vede che il controllo e' stato fatto.
+    e = html.escape
+    titolo = ("⚠️ <b>Check interrotto</b>: Google limita le richieste" if bloccato
+              else "✅ <b>Check ok</b>, nessun prezzo migliore trovato")
+    stato = f"🏆 Minimo attuale: <b>{e(riassunto(top[0]))}</b>" if top else "Nessun prezzo ancora."
+    return bloccato, (intestazione_telegram(p, titolo, cop) + f"\n\n{stato}"
+                      + (f"\n\n{e(chr(10).join(consiglio))}" if consiglio else ""))
+
+
+def testo_copertura(cop):
+    """Copertura della scansione su una riga, per terminale e top.txt."""
+    testo = (f"stimate {cop['stimate']}/{cop['totale']} ricerche, "
+             f"verificate col prezzo completo {cop['verificate']}/{cop['totale']}"
+             + (" (scansione completa)" if cop["verificate"] == cop["totale"] else " (scansione in corso)"))
+    if cop["verificate"] < cop["totale"]:
+        if cop["migliori"]:
+            testo += f". Le {cop['migliori']} combinazioni piu' economiche secondo il calendario sono gia' verificate"
+        testo += (f"; le altre {cop['totale'] - cop['verificate']} ricerche ai prossimi controlli "
+                  f"(massimo {cop['budget']} per controllo, per non farsi bloccare da Google)")
+    if cop["future"]:
+        testo += f"; altre {cop['future']} non ancora possibili (voli oltre il {limite(LIMITE_RICERCA_GIORNI):%d/%m/%Y})"
+    return testo
+
+
+def intestazione_telegram(p, titolo, cop):
+    """Titolo, riassunto dei parametri e copertura della scansione, in HTML per Telegram."""
+    e = html.escape
+    giorno = lambda s: f"{date.fromisoformat(s):%d/%m/%Y}"
+    scali_txt = {None: "scali qualsiasi", 0: "solo diretti", 1: "max 1 scalo"}.get(
+        p["max_scali"], f"max {p['max_scali']} scali")
+    righe = [
+        titolo,
+        "",
+        f"🛫 {e(etichetta(p['andata']['da']))} → {e(etichetta(p['andata']['a']))}",
+        f"🛬 {e(etichetta(p['ritorno']['da']))} → {e(etichetta(p['ritorno']['a']))}",
+        f"📅 Partenza dal {giorno(p['inizio'])} al {giorno(p['fine'])}",
+        f"🧳 Durata min: {p['giorni_min']} gg - max: {p['giorni_max']} giorni · {scali_txt} · controllo ogni {p['frequenza_minuti']} min",
+        "",
+    ]
+    if cop["verificate"] == cop["totale"]:
+        righe.append(f"🔎 <b>Scansione completa</b>: {cop['verificate']}/{cop['totale']} ricerche verificate")
+    else:
+        righe.append(f"🔎 <b>Scansione in corso</b>: {cop['verificate']}/{cop['totale']} ricerche verificate, "
+                     f"{cop['stimate']}/{cop['totale']} stimate")
+        if cop["migliori"]:
+            righe.append(f"✅ Le {cop['migliori']} combinazioni più economiche del calendario sono già verificate")
+        righe.append(f"⏳ Le altre {cop['totale'] - cop['verificate']} ai prossimi controlli "
+                     f"(max {cop['budget']} per controllo, per non farsi bloccare da Google)")
+    if cop["future"]:
+        righe.append(f"🔒 Altre {cop['future']} non ancora cercabili "
+                     f"(voli oltre il {limite(LIMITE_RICERCA_GIORNI):%d/%m/%Y})")
+    return "\n".join(righe)
+
+
+def suggerimento(p, largo, prezzi, chiavi_fuori, top):
+    """Righe "💡 ..." se una partenza fuori dal periodo, verificata in questo giro, costa meno della top."""
+    if not chiavi_fuori:
+        return []
+    x = next((x for x in proposte_verificate(largo, prezzi)
+              if fuori_periodo(p, x) and set(x["chiavi"]) <= set(chiavi_fuori)), None)
+    if not x or (top and x["prezzo"] >= top[0]["prezzo"]):
+        return []
+    risparmio = f"risparmi {top[0]['prezzo'] - x['prezzo']} EUR" if top else "ci sono voli"
+    giorno = date.fromisoformat(x["andata"])
+    return [f"💡 Partendo il {giorno:%d/%m} (fuori dal tuo periodo) {risparmio}: {riassunto(x)}",
+            *(f"   {prezzi[k]['link']}" for k in x["chiavi"])]
+
+
+def nome_tratta(p):
+    andata = f"{nomi(p['andata']['da'])} -> {nomi(p['andata']['a'])}"
+    if p["tipo"] == "stessa":
+        return andata
+    return f"{andata}, ritorno {nomi(p['ritorno']['da'])} -> {nomi(p['ritorno']['a'])}"
+
+
+def _gg(x):
+    return (date.fromisoformat(x["ritorno"]) - date.fromisoformat(x["andata"])).days
+
+
+def riassunto(x):
+    """Una riga: "701 EUR 2 biglietti, andata Tokyo / ritorno da Osaka, 2027-03-08 -> 2027-03-22"."""
+    tipo = f"A/R {x['va']}" if x["tipo"] == "ar" else f"2 biglietti, andata {x['va']} / ritorno da {x['torna']}"
+    return f"{x['prezzo']} EUR {tipo}, {x['andata']} -> {x['ritorno']} ({_gg(x)} gg)"
+
+
+def dettaglio(x, prezzi):
+    """Proposta per terminale e top.txt."""
+    if x["tipo"] == "ar":
+        v = prezzi[x["chiavi"][0]]
+        return (
+            f"{descrivi_prezzo(v)}  A/R {x['va']}  {x['andata']} -> {x['ritorno']} ({_gg(x)} gg)  "
+            f"{v['compagnie']}  [{v['tratte']}]  visto {v['controllato']}\n"
+            + (f"   Prezzo {giudizio(v)}\n" if giudizio(v) else "")
+            + f"   {v['link']}"
         )
-        return bloccato, messaggio_telegram(tratta, top, prezzi, copertura)
-    return bloccato, None
+    va, torna = (prezzi[k] for k in x["chiavi"])
+    righe = [f"{x['prezzo']} EUR  2 biglietti: andata {x['va']}, ritorno da {x['torna']}  "
+             f"{x['andata']} -> {x['ritorno']} ({_gg(x)} gg)"]
+    for nome, v in (("Andata ", va), ("Ritorno", torna)):
+        righe.append(f"   {nome} {v['prezzo']} EUR  {v['compagnie']}  [{v['tratte']}]  visto {v['controllato']}"
+                     + (f"  ({giudizio(v).split(':')[0]})" if giudizio(v) else ""))
+    righe.append("   ⚠ biglietti separati: se un volo cambia o salta, l'altro non e' protetto")
+    righe += [f"   {va['link']}", f"   {torna['link']}"]
+    return "\n".join(righe)
 
 
-def messaggio_telegram(tratta, top, prezzi, copertura):
+def confronto_varianti(p, verificate, stimate):
+    """Miglior prezzo per ogni combinazione di citta' (arrivo andata, partenza ritorno)."""
+    righe = []
+    for x in p["andata"]["a"]:
+        for y in p["ritorno"]["da"]:
+            if p["tipo"] == "stessa" and x["nome"] != y["nome"]:
+                continue
+            celle = []
+            for tipo, nome in (("ar", "A/R"), ("2b", "2 biglietti")):
+                if tipo == "ar" and not (x["nome"] == y["nome"] and x in citta_ar(p)):
+                    continue
+                trova = lambda elenco: next((z for z in elenco if z["tipo"] == tipo and z["va"] == x["nome"]
+                                             and z["torna"] == y["nome"]), None)
+                v, st = trova(verificate), trova(stimate) if stimate else None
+                celle.append((v["prezzo"] if v else None, f"{nome} " + (
+                    f"{v['prezzo']} EUR" if v else f"~{st['prezzo']} EUR (stima)" if st else "n.d.")))
+            righe.append((min((c[0] for c in celle if c[0]), default=None),
+                          f"  Andata {x['nome']}, ritorno da {y['nome']}: " + " · ".join(c[1] for c in celle)))
+    if len(righe) == 1 and len(righe[0][1].split(" · ")) == 1:
+        return []  # una sola variante: niente da confrontare
+    migliore_v = min((r[0] for r in righe if r[0]), default=None)
+    return ["Confronto varianti (prezzi verificati):"] + [
+        testo + ("  ← migliore" if prezzo and prezzo == migliore_v else "") for prezzo, testo in righe
+    ]
+
+
+def messaggio_telegram(p, top, prezzi, cop, confronto, titolo="✈️ <b>Nuovo prezzo minimo</b>"):
     """Top N in HTML per Telegram, con link cliccabili a Google Flights."""
     e = html.escape
-    righe = [f"✈️ <b>Nuovo prezzo minimo</b>\n{e(tratta)}\n<i>{e(copertura)}</i>\n"]
-    for i, k in enumerate(top, 1):
-        v = prezzi[k]
-        andata, ritorno = k.split("|")
-        giorni = (date.fromisoformat(ritorno) - date.fromisoformat(andata)).days
-        righe.append(
-            f"{i}. <b>{migliore(v)} EUR</b>  {andata} → {ritorno} ({giorni} gg)\n"
-            + (f"   su {e(v['venditore']['nome'])} ({v['prezzo']} EUR in lista, {e(v['venditore']['orari'])})\n"
-               if migliore(v) < v["prezzo"] else "")
-            + f"   {e(v['compagnie'])} [{e(v['tratte'])}]"
-            + (f"\n   <i>{e(giudizio(v))}</i>" if giudizio(v) else "")
-            + f"\n   <a href=\"{e(v['link'])}\">Apri su Google Flights</a>"
-        )
+    gm = lambda s: f"{date.fromisoformat(s):%d/%m}"
+    righe = [intestazione_telegram(p, titolo, cop), "", f"🏆 <b>Top {len(top)}</b>"]
+    for i, x in enumerate(top, 1):
+        date_txt = f"   📆 {gm(x['andata'])} → {gm(x['ritorno'])} ({_gg(x)} gg)"
+        if x["tipo"] == "ar":
+            v = prezzi[x["chiavi"][0]]
+            blocco = [f"{i}. <b>{x['prezzo']} EUR</b> · A/R {e(x['va'])}", date_txt]
+            if x["prezzo"] < v["prezzo"]:
+                blocco.append(f"   🏷 su {e(v['venditore']['nome'])} ({v['prezzo']} EUR in lista, "
+                              f"{e(v['venditore']['orari'])})")
+            blocco.append(f"   🛩 {e(v['compagnie'])} [{e(v['tratte'])}]")
+            if giudizio(v):
+                blocco.append(f"   📊 <i>{e(giudizio(v))}</i>")
+            blocco.append(f"   🔗 <a href=\"{e(v['link'])}\">Apri su Google Flights</a>")
+        else:
+            va, torna = (prezzi[k] for k in x["chiavi"])
+            blocco = [f"{i}. <b>{x['prezzo']} EUR</b> · 2 biglietti: andata {e(x['va'])}, ritorno da {e(x['torna'])}",
+                      date_txt]
+            for nome, v in (("Andata", va), ("Ritorno", torna)):
+                blocco.append(f"   🛩 {nome} {v['prezzo']} EUR {e(v['compagnie'])} [{e(v['tratte'])}] "
+                              f"<a href=\"{e(v['link'])}\">apri</a>")
+            blocco.append("   ⚠️ biglietti separati: se un volo cambia o salta, l'altro non è protetto")
+        righe += ["", *blocco]
+    if confronto:
+        testo = e("\n".join(confronto)).replace("Confronto varianti (prezzi verificati):",
+                                                 "⚖️ <b>Confronto varianti</b> (prezzi verificati)")
+        righe += ["", testo]
     return "\n".join(righe)
 
 
@@ -791,17 +1326,26 @@ def conto_alla_rovescia(secondi):
     print("\r" + " " * 60 + "\r", end="", flush=True)
 
 
+def nuovo_client():
+    return Client(impersonate="chrome_145", impersonate_os="macos", referer=True, headers={"Cookie": CONSENT_COOKIE})
+
+
 def main():
     if "--setup-telegram" in sys.argv:
         telegram_bot.setup()
         return
     if not telegram_bot.configurato():
         print("(Notifiche Telegram non attive: per attivarle .venv/bin/python tracker.py --setup-telegram)\n")
+    telegram_bot.ascolta_in_background()  # /start e /stop di chiunque apra il bot
     p = chiedi_parametri()
+    # Per l'A/R sulla stessa citta' il nome e' quello delle versioni precedenti, cosi'
+    # le istanze gia' avviate riprendono i loro dati.
     nome = (
-        f"{'_'.join(p['origine']['aeroporti'])}-{'_'.join(p['destinazione']['aeroporti'])}"
+        f"{'_'.join(aeroporti(p['andata']['da']))}-{'_'.join(aeroporti(p['andata']['a']))}"
         f"-{p['inizio']}_{p['fine']}"
         f"-{p['giorni_min']}-{p['giorni_max']}gg-scali{'X' if p['max_scali'] is None else p['max_scali']}"
+        + (f"-rit_{'_'.join(aeroporti(p['ritorno']['da']))}-{'_'.join(aeroporti(p['ritorno']['a']))}"
+           if p["tipo"] == "diversa" else "")
     )
     cartella = BASE / "data" / nome
     cartella.mkdir(parents=True, exist_ok=True)
@@ -814,22 +1358,30 @@ def main():
         sys.exit(f"Un'altra istanza con questi parametri e' gia' attiva ({cartella}).")
     (cartella / "parametri.json").write_text(json.dumps(p, indent=1))
 
-    tot = len(combinazioni(p))
-    print(f"\n{tot} combinazioni da monitorare. Dati in {cartella}")
+    tot, future = len(chiavi(p)), len(chiavi(p, anche_future=True)) - len(chiavi(p))
+    print(f"\n{tot} ricerche da monitorare ({len(combinazioni(p))} A/R, {len(sole_andate(p))} sole andate)"
+          + (f", +{future} non ancora possibili" if future else "") + f". Dati in {cartella}")
     print(f"Aggiornamento ogni {p['frequenza_minuti']} min (si allunga da solo se Google limita). Ctrl+C per fermare.")
 
-    client = Client(
-        impersonate="chrome_145",
-        impersonate_os="macos",
-        referer=True,
-        headers={"Cookie": CONSENT_COOKIE},
-    )
+    if sys.stdout.isatty():
+        # primp scrive i suoi errori di connessione direttamente sui descrittori 1 e 2 e
+        # rompe la barra: li mando in un file. print() e gli errori Python restano sul terminale.
+        sys.stdout.flush()
+        sys.stdout = os.fdopen(os.dup(1), "w", buffering=1)
+        sys.stderr = os.fdopen(os.dup(2), "w", buffering=1)
+        with open(cartella / "errori_rete.log", "a") as log:
+            os.dup2(log.fileno(), 1)
+            os.dup2(log.fileno(), 2)
+
+    client = nuovo_client()
     ritmo = Ritmo()
-    tratta = f"{p['origine']['etichetta']} -> {p['destinazione']['etichetta']}"
+    tratta = nome_tratta(p)
+    primo = True
     try:
         while True:
             t0 = time.monotonic()
-            bloccato, messaggio = giro(p, cartella, client, ritmo)
+            bloccato, messaggio = giro(p, cartella, client, ritmo, primo=primo)
+            primo = False
             avviso = None
             if bloccato and ritmo.livello < Ritmo.LIVELLO_MAX:
                 ritmo.livello += 1
@@ -850,6 +1402,12 @@ def main():
             conto_alla_rovescia(attesa)
     except KeyboardInterrupt:
         print("\nFermato.")
+        telegram_bot.invia(f"⏹ <b>Tracker fermato</b> da te (Ctrl+C)\n{html.escape(tratta)}")
+    except Exception as e:
+        telegram_bot.invia(f"❌ <b>Tracker fermato</b> per un errore\n{html.escape(tratta)}\n"
+                           f"<code>{html.escape(f'{type(e).__name__}: {e}')[:500]}</code>\n"
+                           "Rilancialo dal terminale.")
+        raise
 
 
 if __name__ == "__main__":
