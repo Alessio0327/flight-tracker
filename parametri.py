@@ -213,7 +213,7 @@ def parametri_da_file(percorso, lingua_scelta=None):
     """
     percorso = Path(percorso).expanduser()
     try:
-        f = json.loads(percorso.read_text())
+        f = json.loads(percorso.read_text(encoding="utf-8"))
     except OSError as e:
         raise ValueError(t("file_illeggibile", errore=e.strerror)) from None
     except json.JSONDecodeError as e:
@@ -267,7 +267,7 @@ def parametri_da_file(percorso, lingua_scelta=None):
         raise ValueError(t("valori_non_validi"))
     if lingua_scelta is not None and f.get("lingua") != lingua_scelta:
         f = {"lingua": lingua_scelta, **{k: v for k, v in f.items() if k != "lingua"}}
-        percorso.write_text(json.dumps(f, indent=2, ensure_ascii=False) + "\n")
+        percorso.write_text(json.dumps(f, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
         print(t("file_lingua_aggiornata", file=percorso))
     return p
 

@@ -170,7 +170,7 @@ def test_messaggi_della_libreria_di_rete_nel_file(tmp_path, capsys):
         tracker.log_rete(file)
         logging.getLogger("primp").warning("h2 connection driver error: excessive load generating behavior")
         logging.shutdown()
-        assert "excessive load" in file.read_text()
+        assert "excessive load" in file.read_text(encoding="utf-8")
         assert "excessive load" not in capsys.readouterr().err
     finally:
         logging.basicConfig(force=True, handlers=[logging.NullHandler()])

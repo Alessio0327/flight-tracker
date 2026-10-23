@@ -61,7 +61,9 @@ typical 690 EUR for that route.
 
 ## Installation
 
-Requires Python 3.11 or later.
+Requires Python 3.11 or later. Works on macOS, Linux and Windows.
+
+macOS and Linux:
 
 ```bash
 git clone https://github.com/Alessio0327/flight-tracker.git
@@ -69,6 +71,20 @@ cd flight-tracker
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
 ```
+
+Windows (PowerShell or Windows Terminal):
+
+```powershell
+git clone https://github.com/Alessio0327/flight-tracker.git
+cd flight-tracker
+py -m venv .venv
+.venv\Scripts\pip install -r requirements.txt
+```
+
+The examples on this page use macOS and Linux commands: on Windows use
+`.venv\Scripts\python` instead of `.venv/bin/python`, e.g. `.venv\Scripts\python tracker.py`.
+Use Windows Terminal: the old `cmd.exe` may show emoji and the progress bar badly. The
+system notification exists only on macOS; Telegram notifications work everywhere.
 
 ## First run
 
@@ -362,11 +378,13 @@ IP) and the time of the next check.
   instances are fine; more make Google's limits arrive sooner.
 - **Restarts:** restarting with the same parameters resumes the prices already found.
   The first message after start still contains the full top list.
-- **Keep the Mac awake:** if the Mac sleeps, checks stop. On macOS you can start it with
-  `caffeinate`, which keeps the Mac awake while the tool runs:
+- **Keep the computer awake:** if the computer sleeps, checks stop. On macOS you can
+  start it with `caffeinate`, which keeps the Mac awake while the tool runs:
   ```bash
   caffeinate -i .venv/bin/python tracker.py ricerche/esempio.json
   ```
+  On Windows set sleep to "Never" while the tool runs (Settings → System → Power); on
+  Linux use e.g. `systemd-inhibit`.
 - **Currency and country:** the same search in another currency has a separate folder.
   If you use a VPN, remember that Google adapts prices to the IP's country: you see it in
   the 🌍 line.
@@ -461,7 +479,7 @@ verified at each check, 15), `ITINERARI_VENDITORI` (booking pages per combinatio
 
 **Nothing arrives on Telegram.** Usually it means the price has not dropped: the bot
 writes only with a new lowest price. To be sure, check that the terminal is open, that
-the Mac is not asleep and the time of `top.txt`.
+the computer is not asleep and the time of `top.txt`.
 
 **I pressed Start on the bot and nothing happens.** The bot answers only while a
 tracker is running: start one and the subscription arrives within 10 seconds.
@@ -487,7 +505,7 @@ hand-written dates (they start from the day they run).
 .venv/bin/python -m pytest
 ```
 
-On every push GitHub Actions runs them on Python 3.11 and 3.13: the result is in the
+On every push GitHub Actions runs them on Linux, Windows and macOS, with Python 3.11 and 3.13: the result is in the
 badge at the top and in the **Actions** tab.
 
 | File | Content |
@@ -500,6 +518,7 @@ badge at the top and in the **Actions** tab.
 | `lingua.py` | Italian and English texts |
 | `luoghi.py` | city and airport lookup (Travelpayouts dataset, 30-day cache) |
 | `telegram_bot.py` | Telegram subscriptions and messages |
+| `blocco.py` | file lock, same on macOS, Linux and Windows |
 | `ricerche/esempio.json` | example parameters |
 | `tests/`, `.github/workflows/test.yml` | tests and their run on GitHub |
 | `telegram.json` | bot token and subscribed chats (excluded from git) |
@@ -520,8 +539,8 @@ badge at the top and in the **Actions** tab.
 - The code and the JSON field names are in Italian.
 
 Personal project, for private and low-volume use. Google's terms of service forbid
-automated access to its services: use it at your own risk, without lowering the
-frequency too much and without multiplying instances.
+automated access to its services: use it at your own risk, without checking too
+often (at least 30 minutes between checks) and with few instances at once.
 
 ## License
 

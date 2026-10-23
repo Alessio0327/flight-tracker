@@ -8,7 +8,6 @@ Chiunque apre il bot e preme Avvia (/start) riceve le notifiche; con /stop smett
 Mentre il tracker gira, un thread controlla i nuovi messaggi ogni ASCOLTO_SECONDI.
 """
 
-import fcntl
 import json
 import os
 import sys
@@ -20,6 +19,7 @@ import urllib.request
 from contextlib import contextmanager
 from pathlib import Path
 
+from blocco import blocca
 from lingua import t
 
 CONFIG = Path(__file__).resolve().parent / "telegram.json"
@@ -51,15 +51,15 @@ def _config_bloccata():
     """Legge telegram.json in esclusiva (piu' istanze del tracker lo modificano) e lo
     riscrive all'uscita. Le versioni precedenti avevano un solo "chat_id"."""
     with open(LOCK, "w") as lock:
-        fcntl.flock(lock, fcntl.LOCK_EX)
-        cfg = json.loads(CONFIG.read_text())
+        blocca(lock)
+        cfg = json.loads(CONFIG.read_text(encoding="utf-8"))
         prima = json.dumps(cfg, sort_keys=True)
         if "chat_id" in cfg:
             cfg["chat_ids"] = [cfg.pop("chat_id")]
         cfg.setdefault("chat_ids", [])
         yield cfg
         if json.dumps(cfg, sort_keys=True) != prima:
-            CONFIG.write_text(json.dumps(cfg))
+            CONFIG.write_text(json.dumps(cfg), encoding="utf-8")
             os.chmod(CONFIG, 0o600)
 
 
@@ -161,11 +161,12 @@ def setup():
 
     # Con lo stesso bot si tengono le chat gia' iscritte; con un bot nuovo si riparte.
     try:
-        vecchio = json.loads(CONFIG.read_text())
+        vecchio = json.loads(CONFIG.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         vecchio = {}
     chat_ids = vecchio.get("chat_ids") or ([vecchio["chat_id"]] if "chat_id" in vecchio else [])
-    CONFIG.write_text(json.dumps({"token": token, "chat_ids": chat_ids if vecchio.get("token") == token else []}))
+    CONFIG.write_text(json.dumps({"token": token, "chat_ids": chat_ids if vecchio.get("token") == token else []}),
+                      encoding="utf-8")
     os.chmod(CONFIG, 0o600)
 
     print(t("setup_passo_3", bot=bot["username"]))

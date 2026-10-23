@@ -38,10 +38,10 @@ Uso: .venv/bin/python tracker.py
 """
 
 import csv
-import fcntl
 import html
 import json
 import logging
+import os
 import re
 import sys
 import time
@@ -50,6 +50,7 @@ from pathlib import Path
 
 from fli.search import SearchFlights
 
+from blocco import blocca
 from google_flights import Bloccato, nuovo_client
 from interfaccia import (
     Barra, breve_posizione, confronto_varianti, conto_alla_rovescia, dettaglio, messaggio_telegram,
@@ -77,7 +78,7 @@ def giro(p, cartella, client, ritmo, primo=False, posizione_prima=None):
     """
     prezzi_path = cartella / "prezzi.json"
     try:
-        prezzi = json.loads(prezzi_path.read_text())
+        prezzi = json.loads(prezzi_path.read_text(encoding="utf-8"))
     except FileNotFoundError:
         prezzi = {}
 
@@ -153,7 +154,7 @@ def giro(p, cartella, client, ritmo, primo=False, posizione_prima=None):
     minimo = record_prima
     adesso = datetime.now().isoformat(timespec="seconds")
     errori = 0
-    with open(cartella / "storico.csv", "a", newline="") as f, Barra(t("barra_verifica"), len(da_fare)) as barra:
+    with open(cartella / "storico.csv", "a", newline="", encoding="utf-8") as f, Barra(t("barra_verifica"), len(da_fare)) as barra:
         storico = csv.writer(f)
         for k in da_fare:
             try:
@@ -190,7 +191,7 @@ def giro(p, cartella, client, ritmo, primo=False, posizione_prima=None):
                     barra.scrivi(t("nuovo_minimo", testo=riassunto(meglio[0])))
             barra.avanza(t("minimo_barra", prezzo=minimo) if minimo else "")
             # Salva subito: Ctrl+C a meta' giro non perde le ricerche fatte.
-            prezzi_path.write_text(json.dumps(prezzi, indent=1, ensure_ascii=False))
+            prezzi_path.write_text(json.dumps(prezzi, indent=1, ensure_ascii=False), encoding="utf-8")
             time.sleep(ritmo.pausa())
 
     # 3. Venditori: per gli A/R in top, prezzi di agenzie e compagnia nelle pagine di
@@ -200,7 +201,7 @@ def giro(p, cartella, client, ritmo, primo=False, posizione_prima=None):
         cercatore, errori = SearchFlights(), 0
         if candidati:
             print(t("venditori_titolo", n=len(candidati)))
-        with open(cartella / "storico.csv", "a", newline="") as f, Barra(t("barra_venditori"), len(candidati)) as barra:
+        with open(cartella / "storico.csv", "a", newline="", encoding="utf-8") as f, Barra(t("barra_venditori"), len(candidati)) as barra:
             storico = csv.writer(f)
             for k in candidati:
                 andata, ritorno = k.split("|")
@@ -225,7 +226,7 @@ def giro(p, cartella, client, ritmo, primo=False, posizione_prima=None):
                                        andata=andata, ritorno=ritorno, orari=orari(ven)))
                         minimo = ven["prezzo"]
                 barra.avanza(t("minimo_barra", prezzo=minimo) if minimo else "")
-                prezzi_path.write_text(json.dumps(prezzi, indent=1, ensure_ascii=False))
+                prezzi_path.write_text(json.dumps(prezzi, indent=1, ensure_ascii=False), encoding="utf-8")
                 time.sleep(ritmo.pausa())
     if bloccato:
         print(t("blocco", motivo=bloccato))
@@ -270,7 +271,7 @@ def giro(p, cartella, client, ritmo, primo=False, posizione_prima=None):
     if consiglio:
         righe += ["", *consiglio]
     testo = "\n".join(righe)
-    (cartella / "top.txt").write_text(testo + "\n")
+    (cartella / "top.txt").write_text(testo + "\n", encoding="utf-8")
     print("\n" + "=" * 80 + "\n" + testo)
 
     nuovo = top and (record_prima is None or top[0]["prezzo"] < record_prima)
@@ -296,11 +297,20 @@ def log_rete(file):
     li stamperebbe sul terminale, in mezzo alla barra di avanzamento.
     """
     file.parent.mkdir(parents=True, exist_ok=True)
-    logging.basicConfig(filename=file, level=logging.WARNING, force=True,
+    logging.basicConfig(filename=file, encoding="utf-8", level=logging.WARNING, force=True,
                         format="%(asctime)s %(name)s %(levelname)s %(message)s")
 
 
+def prepara_terminale():
+    """Su Windows: UTF-8 per emoji e accenti, e sequenze ANSI per la barra su una riga."""
+    if sys.platform == "win32":
+        os.system("")  # attiva le sequenze ANSI nella console di Windows
+        for flusso in (sys.stdout, sys.stderr):
+            flusso.reconfigure(encoding="utf-8", errors="replace")
+
+
 def main():
+    prepara_terminale()
     log_rete(BASE / "data" / "errori_rete.log")  # fino a quando la cartella della ricerca non e' nota
     file_parametri = [a for a in sys.argv[1:] if not a.startswith("--")]
     if file_parametri:
@@ -338,10 +348,10 @@ def main():
     # Due istanze con gli stessi parametri si sovrascriverebbero i file.
     lock = open(cartella / ".lock", "w")
     try:
-        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        blocca(lock, attendi=False)
     except BlockingIOError:
         sys.exit(t("altra_istanza", cartella=cartella))
-    (cartella / "parametri.json").write_text(json.dumps(p, indent=1))
+    (cartella / "parametri.json").write_text(json.dumps(p, indent=1), encoding="utf-8")
 
     tot, future = len(chiavi(p)), len(chiavi(p, anche_future=True)) - len(chiavi(p))
     print(t("da_monitorare", totale=tot, ar=len(combinazioni(p)), sole=len(sole_andate(p)),

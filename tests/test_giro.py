@@ -65,7 +65,7 @@ def test_primo_giro_nuovo_minimo(tmp_path, google_finto, capsys):
     assert "(scansione completa)" in out
     assert "💡 Partendo il" in out and "risparmi 150 EUR" in out
     assert "💡 Partendo il" in messaggio
-    top = (tmp_path / "top.txt").read_text()
+    top = (tmp_path / "top.txt").read_text(encoding="utf-8")
     assert top.count("A/R Osaka") >= 5
     # le date fuori periodo non entrano nella top
     assert tra(58).isoformat() not in top.split("💡")[0]
@@ -97,7 +97,7 @@ def test_scansione_parziale_e_rotazione(tmp_path, google_finto, monkeypatch):
     verificate = []
     for _ in range(totale):
         tracker.giro(p, tmp_path, None, ricerca.Ritmo())
-        prezzi = json.loads((tmp_path / "prezzi.json").read_text())
+        prezzi = json.loads((tmp_path / "prezzi.json").read_text(encoding="utf-8"))
         verificate.append(len(set(ricerca.chiavi(p)) & set(prezzi)))
         if verificate[-1] == totale:
             break
@@ -122,7 +122,7 @@ def test_date_passate_tolte_dai_dati(tmp_path, google_finto):
     (tmp_path / "prezzi.json").write_text(json.dumps({vecchia: {"prezzo": 1, "controllato": "x"}}))
     p = viaggio(giorni_partenza=2, durata=(14, 14))
     tracker.giro(p, tmp_path, None, ricerca.Ritmo())
-    assert vecchia not in json.loads((tmp_path / "prezzi.json").read_text())
+    assert vecchia not in json.loads((tmp_path / "prezzi.json").read_text(encoding="utf-8"))
 
 
 def test_posizione_nel_terminale_e_su_telegram(tmp_path, google_finto, capsys):
@@ -133,8 +133,8 @@ def test_posizione_nel_terminale_e_su_telegram(tmp_path, google_finto, capsys):
     assert "🌍 Ricerche da 🇮🇹 IT" in messaggio
     assert "203.0.113.7" not in messaggio  # l'IP resta nel terminale
     assert pos["paese"] == "IT"
-    assert "IP 203.0.113.7" in (tmp_path / "top.txt").read_text()
-    assert (tmp_path / "storico.csv").read_text().splitlines()[0].endswith(",IT")
+    assert "IP 203.0.113.7" in (tmp_path / "top.txt").read_text(encoding="utf-8")
+    assert (tmp_path / "storico.csv").read_text(encoding="utf-8").splitlines()[0].endswith(",IT")
 
 
 def test_paese_cambiato(tmp_path, google_finto, capsys):

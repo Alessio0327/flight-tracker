@@ -1,6 +1,7 @@
 """Iscrizioni e invio Telegram, con l'API di Telegram finta (nessun messaggio vero)."""
 
 import json
+import sys
 
 import pytest
 
@@ -31,7 +32,7 @@ def bot(tmp_path, monkeypatch):
             raise AssertionError(metodo)
 
         def config(self):
-            return json.loads(telegram_bot.CONFIG.read_text())
+            return json.loads(telegram_bot.CONFIG.read_text(encoding="utf-8"))
 
     finto = Finto()
     monkeypatch.setattr(telegram_bot, "_chiama", finto.chiama)
@@ -106,7 +107,19 @@ def test_senza_configurazione_non_invia(bot):
     assert bot.inviati == [] and not telegram_bot.configurato()
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="su Windows i permessi Unix non esistono")
 def test_permessi_del_file(bot):
     bot.coda = [messaggio(10, 2, "/start")]
     telegram_bot.controlla_iscrizioni()
     assert telegram_bot.CONFIG.stat().st_mode & 0o777 == 0o600
+
+
+def test_blocco_esclusivo(tmp_path):
+    import blocco
+    file = tmp_path / "x.lock"
+    with open(file, "w") as primo, open(file, "w") as secondo:
+        blocco.blocca(primo)
+        with pytest.raises(BlockingIOError):
+            blocco.blocca(secondo, attendi=False)
+    with open(file, "w") as terzo:  # chiusi i primi due, il blocco e' libero
+        blocco.blocca(terzo, attendi=False)

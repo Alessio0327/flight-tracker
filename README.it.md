@@ -61,7 +61,9 @@ lista di Google e i 690 EUR tipici per quella tratta.
 
 ## Installazione
 
-Serve Python 3.11 o più recente.
+Serve Python 3.11 o più recente. Funziona su macOS, Linux e Windows.
+
+macOS e Linux:
 
 ```bash
 git clone https://github.com/Alessio0327/flight-tracker.git
@@ -69,6 +71,21 @@ cd flight-tracker
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
 ```
+
+Windows (PowerShell o Windows Terminal):
+
+```powershell
+git clone https://github.com/Alessio0327/flight-tracker.git
+cd flight-tracker
+py -m venv .venv
+.venv\Scripts\pip install -r requirements.txt
+```
+
+Negli esempi di questa pagina i comandi sono quelli di macOS e Linux: su Windows usa
+`.venv\Scripts\python` al posto di `.venv/bin/python`, per esempio
+`.venv\Scripts\python tracker.py`. Usa Windows Terminal: il vecchio `cmd.exe` può
+mostrare male emoji e barra di avanzamento. La notifica di sistema c'è solo su macOS;
+quelle Telegram funzionano ovunque.
 
 ## Primo utilizzo
 
@@ -366,11 +383,13 @@ Ogni messaggio riporta i parametri della ricerca, il paese da cui partono le ric
   istanze sei tranquillo, di più fanno arrivare prima i limiti di Google.
 - **Riavvii:** rilanciando con gli stessi parametri il tool riprende i prezzi già
   trovati. Il primo messaggio dopo l'avvio contiene comunque la top completa.
-- **Mac sveglio:** se il Mac va in stop i controlli si fermano. Su macOS puoi lanciarlo
-  con `caffeinate`, che tiene sveglio il Mac finché il tool gira:
+- **Computer sveglio:** se il computer va in stop i controlli si fermano. Su macOS puoi
+  lanciarlo con `caffeinate`, che tiene sveglio il Mac finché il tool gira:
   ```bash
   caffeinate -i .venv/bin/python tracker.py ricerche/esempio.json
   ```
+  Su Windows imposta la sospensione su "Mai" mentre il tool gira (Impostazioni →
+  Sistema → Alimentazione); su Linux usa ad esempio `systemd-inhibit`.
 - **Valuta e paese:** la stessa ricerca in un'altra valuta ha una cartella separata. Se
   usi una VPN, ricorda che Google adatta i prezzi al paese dell'IP: lo vedi nella riga 🌍.
 
@@ -465,7 +484,7 @@ ogni controllo, 15), `ITINERARI_VENDITORI` (pagine di prenotazione per combinazi
 
 **Su Telegram non arriva niente.** Di solito vuol dire che il prezzo non è sceso: il bot
 scrive solo con un nuovo minimo. Per esserne sicuro controlla che il terminale sia
-aperto, che il Mac non sia in stop e l'ora di `top.txt`.
+aperto, che il computer non sia in stop e l'ora di `top.txt`.
 
 **Ho premuto Avvia sul bot e non succede nulla.** Il bot risponde solo mentre un tracker
 è attivo: avvialo e l'iscrizione arriva entro 10 secondi.
@@ -491,7 +510,7 @@ date scritte a mano (partono dal giorno in cui girano).
 .venv/bin/python -m pytest
 ```
 
-A ogni push GitHub Actions li esegue su Python 3.11 e 3.13: il risultato è nel badge in
+A ogni push GitHub Actions li esegue su Linux, Windows e macOS, con Python 3.11 e 3.13: il risultato è nel badge in
 cima e nella scheda **Actions**.
 
 | File | Contenuto |
@@ -504,6 +523,7 @@ cima e nella scheda **Actions**.
 | `lingua.py` | testi in italiano e inglese |
 | `luoghi.py` | ricerca città e aeroporti (dataset Travelpayouts, cache 30 giorni) |
 | `telegram_bot.py` | iscrizioni e messaggi Telegram |
+| `blocco.py` | blocco dei file, uguale su macOS, Linux e Windows |
 | `ricerche/esempio.json` | esempio di parametri |
 | `tests/`, `.github/workflows/test.yml` | test e loro esecuzione su GitHub |
 | `telegram.json` | token del bot e chat iscritte (escluso da git) |
@@ -523,8 +543,8 @@ cima e nella scheda **Actions**.
   Flights: il tool controlla solo che il codice abbia 3 lettere.
 
 Progetto personale, per uso privato e a basso volume. Le condizioni d'uso di Google
-vietano l'accesso automatico ai suoi servizi: usalo a tuo rischio, senza abbassare
-troppo la frequenza e senza moltiplicare le istanze.
+vietano l'accesso automatico ai suoi servizi: usalo a tuo rischio, senza controllare
+troppo spesso (almeno 30 minuti tra un controllo e l'altro) e con poche istanze insieme.
 
 ## Licenza
 

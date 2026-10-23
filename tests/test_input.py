@@ -141,7 +141,7 @@ def test_file_json_rotto_e_inesistente(tmp_path):
 def test_file_esempio_del_repository_ha_struttura_valida(tmp_path):
     """ricerche/esempio.json ha una data fissa (e' un esempio da modificare): qui si
     controlla solo la struttura, spostando il periodo nel futuro."""
-    esempio = json.loads((tracker.BASE / "ricerche" / "esempio.json").read_text())
+    esempio = json.loads((tracker.BASE / "ricerche" / "esempio.json").read_text(encoding="utf-8"))
     esempio["periodo"] = {"data": tra(60).strftime("%d/%m/%Y"), "giorni_prima_dopo": 3}
     p = parametri.parametri_da_file(scrivi(tmp_path, esempio))
     assert isinstance(date.fromisoformat(p["inizio"]), date)

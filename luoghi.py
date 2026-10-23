@@ -25,7 +25,7 @@ def _carica(nome):
         except OSError:
             if not path.exists():
                 raise  # senza copia locale non si puo' andare avanti
-    return json.loads(path.read_text())
+    return json.loads(path.read_text(encoding="utf-8"))
 
 
 def _norm(s):

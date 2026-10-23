@@ -104,7 +104,7 @@ def test_lingua_scelta_vince_e_aggiorna_il_file(tmp_path, inglese, capsys):
     path = file_osaka(tmp_path, lingua="it")
     p = parametri.parametri_da_file(path, lingua_scelta="en")
     assert p["lingua"] == "en" and lingua.LINGUA == "en"
-    salvato = json.loads(path.read_text())
+    salvato = json.loads(path.read_text(encoding="utf-8"))
     assert salvato["lingua"] == "en"
     assert salvato["durata"] == {"min": 14, "max": 15}  # il resto del file non cambia
     assert "File language updated" in capsys.readouterr().out
@@ -112,15 +112,15 @@ def test_lingua_scelta_vince_e_aggiorna_il_file(tmp_path, inglese, capsys):
 
 def test_stessa_lingua_file_non_riscritto(tmp_path):
     path = file_osaka(tmp_path, lingua="it")
-    prima = path.read_text()
+    prima = path.read_text(encoding="utf-8")
     parametri.parametri_da_file(path, lingua_scelta="it")
-    assert path.read_text() == prima
+    assert path.read_text(encoding="utf-8") == prima
 
 
 def test_lingua_scelta_aggiunta_se_manca(tmp_path, inglese):
     path = file_osaka(tmp_path)
     parametri.parametri_da_file(path, lingua_scelta="en")
-    assert json.loads(path.read_text())["lingua"] == "en"
+    assert json.loads(path.read_text(encoding="utf-8"))["lingua"] == "en"
 
 
 def test_avvio_diretto_senza_campo_lingua_e_italiano(tmp_path, inglese):

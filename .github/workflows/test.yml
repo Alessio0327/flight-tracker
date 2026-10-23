@@ -1,4 +1,4 @@
-# Esegue i test a ogni push e pull request, su Python 3.11 e 3.13.
+# Esegue i test a ogni push e pull request: Linux, Windows e macOS, Python 3.11 e 3.13.
 # I test non fanno richieste a Google ne' a Telegram.
 name: test
 
@@ -8,9 +8,11 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
         python-version: ["3.11", "3.13"]
     steps:
       - uses: actions/checkout@v7
