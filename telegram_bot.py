@@ -20,17 +20,14 @@ import urllib.request
 from contextlib import contextmanager
 from pathlib import Path
 
+from lingua import t
+
 CONFIG = Path(__file__).resolve().parent / "telegram.json"
 LOCK = CONFIG.with_name("telegram.lock")
 API = "https://api.telegram.org/bot{token}/{metodo}"
 MAX_CARATTERI = 4096
 TENTATIVI = 3
 ASCOLTO_SECONDI = 10
-
-BENVENUTO = ("✅ Iscritto alle notifiche voli.\n"
-             "Riceverai i prossimi aggiornamenti dei tracker attivi. Invia /stop per smettere.")
-CONGEDO = "👋 Notifiche disattivate. Premi /start per riattivarle."
-AIUTO = "Questo bot manda solo notifiche sui prezzi dei voli. /start per iscriverti, /stop per smettere."
 
 
 def _chiama(token, metodo, **params):
@@ -85,7 +82,7 @@ def _invia_a(token, chat_id, testo_html):
             errore = e
         if tentativo < TENTATIVI:
             time.sleep(5 * tentativo)  # errori di rete spesso momentanei
-    print(f"[telegram] invio a {chat_id} fallito dopo {TENTATIVI} tentativi: {errore}", file=sys.stderr)
+    print(t("bot_invio_fallito", chat=chat_id, tentativi=TENTATIVI, errore=errore), file=sys.stderr)
     return True
 
 
@@ -99,7 +96,7 @@ def invia(testo_html):
         with _config_bloccata() as cfg:
             token, chat_ids = cfg["token"], list(cfg["chat_ids"])
     except (OSError, ValueError, KeyError) as e:
-        print(f"[telegram] configurazione illeggibile: {e}", file=sys.stderr)
+        print(t("bot_config_illeggibile", errore=e), file=sys.stderr)
         return
     perse = [c for c in chat_ids if not _invia_a(token, c, testo_html)]
     if perse:
@@ -124,12 +121,12 @@ def controlla_iscrizioni():
                 if chat not in cfg["chat_ids"]:
                     cfg["chat_ids"].append(chat)
                     nuove.append(chat)
-                risposta = BENVENUTO
+                risposta = t("bot_benvenuto")
             elif testo.startswith("/stop"):
                 cfg["chat_ids"] = [c for c in cfg["chat_ids"] if c != chat]
-                risposta = CONGEDO
+                risposta = t("bot_congedo")
             else:
-                risposta = AIUTO
+                risposta = t("bot_aiuto")
             try:
                 _chiama(token, "sendMessage", chat_id=chat, text=risposta)
             except (OSError, RuntimeError):
@@ -152,15 +149,15 @@ def ascolta_in_background():
 
 
 def setup():
-    print("1. Su Telegram apri @BotFather, invia /newbot e segui le istruzioni.")
-    print("2. Copia il token che ti da' (tipo 123456:ABC-...).\n")
+    print(t("setup_passo_1"))
+    print(t("setup_passo_2"))
     while True:
-        token = input("Token del bot: ").strip()
+        token = input(t("setup_token")).strip()
         try:
             bot = _chiama(token, "getMe")
             break
         except (OSError, RuntimeError) as e:
-            print(f"  token non valido ({e}), riprova")
+            print(t("setup_token_errato", errore=e))
 
     # Con lo stesso bot si tengono le chat gia' iscritte; con un bot nuovo si riparte.
     try:
@@ -171,9 +168,9 @@ def setup():
     CONFIG.write_text(json.dumps({"token": token, "chat_ids": chat_ids if vecchio.get("token") == token else []}))
     os.chmod(CONFIG, 0o600)
 
-    print(f"\n3. Apri il bot @{bot['username']} su Telegram e premi Avvia (o invia /start).")
-    print("   Chiunque faccia lo stesso, anche dopo, riceve le notifiche mentre il tracker gira.")
-    print("   In attesa del primo /start...")
+    print(t("setup_passo_3", bot=bot["username"]))
+    print(t("setup_chiunque"))
+    print(t("setup_attesa"))
     while not controlla_iscrizioni():
         time.sleep(2)
-    print(f"\nFatto. Configurazione in {CONFIG}")
+    print(t("setup_fatto", file=CONFIG))

@@ -13,6 +13,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+import lingua  # noqa: E402
 import tracker  # noqa: E402
 
 OGGI = date.today()
@@ -51,3 +52,15 @@ def parametri(tipo="stessa", arrivi=(OSAKA,), ritorno_da=None, tra_giorni=60, gi
 def oggi_fisso(monkeypatch):
     monkeypatch.setattr(tracker, "oggi", lambda: OGGI)
 
+
+@pytest.fixture(autouse=True)
+def italiano():
+    """Ogni test parte in italiano; i test in inglese usano la fixture `inglese`."""
+    lingua.imposta("it")
+    yield
+    lingua.imposta("it")
+
+
+@pytest.fixture
+def inglese():
+    lingua.imposta("en")

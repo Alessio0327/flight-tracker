@@ -1,41 +1,50 @@
 # flight-tracker
 
-Monitor da terminale dei prezzi dei voli su Google Flights.
+[![test](https://github.com/Alessio0327/flight-tracker/actions/workflows/test.yml/badge.svg)](https://github.com/Alessio0327/flight-tracker/actions/workflows/test.yml)
 
-Gli dai le città, il periodo di partenza e la durata del viaggio. Ogni N minuti il
-tool prova tutte le combinazioni di date, ti mostra le migliori e ti avvisa su
-Telegram (e con una notifica macOS) quando il prezzo scende.
+🇬🇧 **English** · 🇮🇹 [Italiano](README.it.md)
 
-- Città al posto dei codici IATA: scrivi "Roma" e scegli Fiumicino, Ciampino o entrambi.
-- Fino a 2 città per lato (es. arrivo Tokyo o Osaka), con i soli aeroporti che ti vanno bene.
-- Ritorno dalla stessa città o da un'altra (es. andata Roma→Tokyo, ritorno Osaka→Roma).
-- Confronto tra andata e ritorno su un biglietto e due biglietti di sola andata.
-- Periodo: un mese, una data ± N giorni, oppure un intervallo di date.
-- Suggerimento di partenze fino a 7 giorni fuori dal periodo, se costano meno.
-- Giudizio sul prezzo (basso / nella media / alto) rispetto alla fascia tipica di Google.
-- Prezzi delle agenzie (lastminute, Gotogate, ...), spesso più bassi del prezzo in lista.
-- Parametri da domande interattive o da un file JSON.
-- Notifiche Telegram per chiunque prema Avvia sul bot.
-- Più ricerche in parallelo, una per terminale; i dati restano tra un avvio e l'altro.
-- Rallenta da solo se Google limita le richieste.
+A terminal tool that monitors flight prices on Google Flights.
 
-## Indice
+You give it the cities, the departure period and the trip length. Every N minutes
+the tool tries every combination of dates, shows the best ones and alerts you on
+Telegram (and with a macOS notification) when the price drops.
 
-- [Installazione](#installazione)
-- [Avvio rapido](#avvio-rapido)
-- [Modalità di viaggio](#modalità-di-viaggio)
-- [Inserire i parametri](#inserire-i-parametri)
-- [Cosa mostra il terminale](#cosa-mostra-il-terminale)
-- [Notifiche Telegram](#notifiche-telegram)
-- [Più ricerche e ripresa dei dati](#più-ricerche-e-ripresa-dei-dati)
-- [Come funziona](#come-funziona)
-- [Quante richieste a Google](#quante-richieste-a-google)
-- [Problemi comuni](#problemi-comuni)
-- [Limiti](#limiti)
+The tool speaks Italian or English: choose at startup. The examples below show the
+Italian version, with explanations in English.
 
-## Installazione
+- City names instead of IATA codes: type "Roma" and pick Fiumicino, Ciampino or both.
+- Up to 2 cities per side (e.g. arrival in Tokyo or Osaka), with only the airports you want.
+- Return from the same city or from a different one (e.g. Rome→Tokyo, then Osaka→Rome).
+- Compares a round trip on one ticket with two one-way tickets.
+- Period: a month, a date ± N days, or a date range.
+- Suggests departures up to 7 days outside the period when they are cheaper.
+- Price rating (low / typical / high) against Google's typical range.
+- Agency prices (lastminute, Gotogate, ...), often lower than the listed price.
+- Parameters from interactive questions or from a JSON file.
+- Italian or English: questions, terminal and Telegram messages.
+- Telegram notifications for anyone who presses Start on the bot.
+- Several searches in parallel, one per terminal; data is kept between runs.
+- Slows down by itself when Google limits requests.
 
-Serve Python 3.11 o più recente.
+## Contents
+
+- [Installation](#installation)
+- [Quick start](#quick-start)
+- [Trip types](#trip-types)
+- [Entering the parameters](#entering-the-parameters)
+- [What the terminal shows](#what-the-terminal-shows)
+- [Telegram notifications](#telegram-notifications)
+- [Several searches and resuming data](#several-searches-and-resuming-data)
+- [How it works](#how-it-works)
+- [How many requests to Google](#how-many-requests-to-google)
+- [Troubleshooting](#troubleshooting)
+- [Development and tests](#development-and-tests)
+- [Limitations](#limitations)
+
+## Installation
+
+Requires Python 3.11 or later.
 
 ```bash
 git clone https://github.com/Alessio0327/flight-tracker.git
@@ -44,79 +53,90 @@ python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
 ```
 
-## Avvio rapido
+## Quick start
 
-1. (Facoltativo) Collega il bot Telegram, una volta sola:
+1. (Optional) Connect the Telegram bot, once:
    ```bash
    .venv/bin/python tracker.py --setup-telegram
    ```
-2. Avvia il tracker:
+2. Start the tracker (the first question is the language, `1` Italian or `2` English):
    ```bash
    .venv/bin/python tracker.py
    ```
-3. Rispondi alle domande, oppure scegli `2` e indica un file JSON
-   (es. `ricerche/esempio.json`).
-4. Lascia il terminale aperto. Il tool lavora da solo finché non premi Ctrl+C.
+3. Answer the questions, or choose `2` and give a JSON file
+   (e.g. `ricerche/esempio.json`).
+4. Leave the terminal open. The tool works on its own until you press Ctrl+C.
 
-## Modalità di viaggio
+## Trip types
 
-La prima domanda del percorso interattivo è il tipo di viaggio.
+The first interactive question is the trip type
+(`Tipo di viaggio: [1] andata e ritorno sulla stessa citta'  [2] ritorno da un'altra citta'`).
 
-### [1] Andata e ritorno sulla stessa città
+### [1] Round trip to the same city
 
-Il ritorno parte dalla città di arrivo e torna alla città di partenza.
-Esempio: Roma → Osaka, ritorno Osaka → Roma.
+The return leaves from the arrival city and goes back to the departure city.
+Example: Rome → Osaka, return Osaka → Rome.
 
-Con due città di arrivo (es. Tokyo e Osaka) il tool cerca entrambe, ma non le
-mescola: andata e ritorno sono sempre sulla stessa città.
+With two arrival cities (e.g. Tokyo and Osaka) the tool searches both, but never
+mixes them: outbound and return are always on the same city.
 
-Per ogni combinazione di date il tool cerca:
-- l'**andata e ritorno su un unico biglietto** (di solito la più economica sui voli lunghi);
-- **due biglietti di sola andata**, come confronto.
+For each date combination the tool searches:
+- a **round trip on a single ticket** (usually the cheapest on long-haul flights);
+- **two one-way tickets**, for comparison.
 
-### [2] Ritorno da un'altra città
+### [2] Return from a different city
 
-Scegli separatamente le città dell'andata e quelle del ritorno (1 o 2 per lato).
-Esempio: andata Roma → Tokyo o Osaka, ritorno Tokyo o Osaka → Roma.
+You choose the outbound cities and the return cities separately (1 or 2 per side).
+Example: outbound Rome → Tokyo or Osaka, return Tokyo or Osaka → Rome.
 
-Il tool prova tutte le combinazioni di città:
+The tool tries every city combination:
 
-| Variante | Come la cerca |
+| Variant | How it is searched |
 |---|---|
-| Andata Tokyo, ritorno da Tokyo | A/R su un biglietto + 2 biglietti di sola andata |
-| Andata Osaka, ritorno da Osaka | A/R su un biglietto + 2 biglietti di sola andata |
-| Andata Tokyo, ritorno da Osaka | 2 biglietti di sola andata |
-| Andata Osaka, ritorno da Tokyo | 2 biglietti di sola andata |
+| Outbound Tokyo, return from Tokyo | round trip on one ticket + two one-way tickets |
+| Outbound Osaka, return from Osaka | round trip on one ticket + two one-way tickets |
+| Outbound Tokyo, return from Osaka | two one-way tickets |
+| Outbound Osaka, return from Tokyo | two one-way tickets |
 
-L'A/R su un biglietto vale solo quando il ritorno parte dalla città di arrivo e torna
-alla città di partenza. Per le varianti miste il tool combina due biglietti di sola
-andata, perché il biglietto unico "multi-città" non è disponibile nelle API usate.
+A single-ticket round trip is possible only when the return leaves from the arrival
+city and goes back to the departure city. For mixed variants the tool combines two
+one-way tickets, because the single "multi-city" ticket is not available in the APIs
+used.
 
-Alla fine di ogni controllo trovi il confronto tra le varianti, con la migliore segnata.
+At the end of each check you get a comparison of the variants, with the best one marked.
 
-### Quale scegliere
+### Which one to choose
 
-| Vuoi... | Tipo | Esempio |
+| You want... | Type | Example |
 |---|---|---|
-| Il prezzo migliore verso una città | 1 | Roma → Osaka |
-| Sapere se conviene Tokyo o Osaka | 1, due città di arrivo | Roma → Tokyo, Osaka |
-| Un viaggio con entrata e uscita da città diverse | 2 | Roma → Tokyo, ritorno Osaka → Roma |
-| Tutte le combinazioni tra due città | 2, due città per lato | come sopra, con Tokyo e Osaka su entrambi i lati |
+| The best price to one city | 1 | Rome → Osaka |
+| To know whether Tokyo or Osaka is cheaper | 1, two arrival cities | Rome → Tokyo, Osaka |
+| A trip entering and leaving through different cities | 2 | Rome → Tokyo, return Osaka → Rome |
+| Every combination of two cities | 2, two cities per side | as above, with Tokyo and Osaka on both sides |
 
-Più città e più giorni vogliono dire più ricerche: vedi
-[Quante richieste a Google](#quante-richieste-a-google).
+More cities and more days mean more searches: see
+[How many requests to Google](#how-many-requests-to-google).
 
-## Inserire i parametri
+## Entering the parameters
 
-All'avvio:
+At startup the tool asks for the language (questions, terminal, `top.txt` and
+Telegram), then whether to answer questions (`1`) or read a JSON file (`2`):
+
+```
+Lingua / Language: [1] Italiano  [2] English (Invio/Enter = 1): 2
+Parameters: [1] answer the questions  [2] read a JSON file (Enter = 1):
+```
+
+With `2` (English) every question and message below is in English; the examples
+show the Italian version:
 
 ```
 Parametri: [1] rispondo alle domande  [2] leggo da un file JSON (Invio = 1):
 ```
 
-### Con le domande
+### With the questions
 
-Esempio con ritorno da un'altra città:
+Example with a return from a different city:
 
 ```
 Date cercabili: partenza da domani, ultimo volo entro il 17/09/2027 (limite di Google Flights, oggi + 330 giorni).
@@ -155,31 +175,45 @@ Quanti migliori risultati mostrare: 5
 Frequenza aggiornamento (minuti): 60
 ```
 
-Nel ritorno, Invio riusa le città dell'andata al contrario.
+The questions, in order:
 
-Prima di chiedere la durata, il tool controlla sul calendario di Google che nel
-periodo ci siano voli in vendita. Se non ce ne sono, chiede subito un altro periodo o
-un'altra città, senza farti rispondere alle altre domande.
-
-Risposte accettate:
-
-| Domanda | Esempi |
+| Question | Meaning |
 |---|---|
-| Città | `roma`, `Tokyo`, codice aeroporto `FCO`, codice città `ROM` |
-| Aeroporti | Invio = tutti, oppure numeri separati da virgola: `1,3` |
-| Mese | `10/2027`, `10/27`, `2027-10` |
-| Data | `15/10/2027`, `15/10/27`, `2027-10-15` |
-| Giorni prima/dopo | `10` = 10 giorni prima e 10 dopo la data |
-| Scali | `0` = solo diretti, `1`, `2`, Invio = qualsiasi |
+| `Date cercabili: ...` | first and last date Google can search (today + 330 days) |
+| `Tipo di viaggio` | trip type, see above |
+| `ANDATA` / `RITORNO` | outbound / return cities. For the return, Enter reuses the outbound cities reversed |
+| `Quante citta'` | how many cities on that side (1 or 2) |
+| `Aeroporti` | which airports of the city (Enter = all) |
+| `Periodo di partenza` | departure period: `1` = a month, `2` = around a date |
+| `Quanti giorni prima/dopo` | days before and after that date |
+| `Durata minima/massima` | minimum / maximum trip length in days |
+| `Massimo scali` | maximum stops per leg |
+| `Quanti migliori risultati` | how many results to show |
+| `Frequenza aggiornamento` | minutes between checks |
 
-Attenzione al periodo: con `20/03/27` e `10` le partenze vanno dal 10/03 al 30/03.
-Un volo che parte il 03/03 resta fuori (al massimo compare come suggerimento 💡).
+Before asking for the trip length, the tool checks Google's calendar for flights on
+sale in the period. If there are none, it immediately asks for another period or
+city, without making you answer the remaining questions.
 
-### Da un file JSON
+Accepted answers:
 
-Rispondi `2` e scrivi il percorso del file. Puoi anche trascinare il file nel
-Terminale: apici e spazi protetti vengono tolti da soli. Il tool mostra un riassunto
-e parte senza altre domande:
+| Question | Examples |
+|---|---|
+| City | `roma`, `Tokyo`, airport code `FCO`, city code `ROM` |
+| Airports | Enter = all, or comma-separated numbers: `1,3` |
+| Month | `10/2027`, `10/27`, `2027-10` |
+| Date | `15/10/2027`, `15/10/27`, `2027-10-15` (day/month/year) |
+| Days before/after | `10` = 10 days before and 10 after the date |
+| Stops | `0` = direct only, `1`, `2`, Enter = any |
+
+Mind the period: with `20/03/27` and `10`, departures go from 10/03 to 30/03.
+A flight leaving on 03/03 is outside (at most it appears as a 💡 suggestion).
+
+### From a JSON file
+
+Answer `2` and type the file path. You can also drag the file into the Terminal:
+quotes and escaped spaces are removed automatically. The tool prints a summary and
+starts without further questions:
 
 ```
 Parametri: [1] rispondo alle domande  [2] leggo da un file JSON (Invio = 1): 2
@@ -189,10 +223,11 @@ Percorso del file JSON: ricerche/esempio.json
   Partenza dal 28/02/2027 al 20/03/2027, durata 14-21 giorni, max 1 scalo, top 5, ogni 60 min
 ```
 
-Esempio di file (`ricerche/esempio.json`):
+Example file (`ricerche/esempio.json`):
 
 ```json
 {
+  "lingua": "it",
   "andata": {
     "da": [{"nome": "Roma", "aeroporti": ["FCO"]}],
     "a": [
@@ -215,26 +250,46 @@ Esempio di file (`ricerche/esempio.json`):
 }
 ```
 
-| Campo | Obbligatorio | Valori |
+| Field | Required | Values |
 |---|---|---|
-| `andata.da`, `andata.a` | sì | 1 o 2 città, ognuna `{"nome": "...", "aeroporti": ["..."]}` |
-| `ritorno.da`, `ritorno.a` | no | come sopra. Senza `ritorno` il viaggio è di tipo 1 (stessa città) |
-| `periodo` | sì | `{"data": "10/03/2027", "giorni_prima_dopo": 10}`, `{"mese": "03/2027"}` oppure `{"dal": "01/03/2027", "al": "20/03/2027"}` |
-| `durata` | sì | `{"min": 14, "max": 21}` |
-| `max_scali` | no | `null` o assente = qualsiasi, `0` = solo diretti, `1`, `2` |
-| `top` | no | numero di risultati, default 5 |
-| `frequenza_minuti` | no | minuti tra un controllo e l'altro, default 30 |
+| `lingua` | no | `"it"` or `"en"`, default `"it"`. Used on direct start; when you load the file from the questions, it is updated with the language chosen at startup |
+| `andata.da`, `andata.a` | yes | outbound from / to: 1 or 2 cities, each `{"nome": "...", "aeroporti": ["..."]}` |
+| `ritorno.da`, `ritorno.a` | no | return from / to, same format. Without `ritorno` the trip is type 1 (same city) |
+| `periodo` | yes | `{"data": "10/03/2027", "giorni_prima_dopo": 10}`, `{"mese": "03/2027"}` or `{"dal": "01/03/2027", "al": "20/03/2027"}` |
+| `durata` | yes | trip length: `{"min": 14, "max": 21}` |
+| `max_scali` | no | max stops: `null` or missing = any, `0` = direct only, `1`, `2` |
+| `top` | no | number of results, default 5 |
+| `frequenza_minuti` | no | minutes between checks, default 30 |
 
-Nel file le città vanno scritte con i codici aeroporto: la ricerca per nome vale solo
-nelle domande. Il `nome` serve solo per i messaggi. Se il file non è valido, il tool
-dice cosa non va (es. `manca il campo 'periodo'`) e richiede il percorso.
+In the file, cities are written with airport codes: name lookup works only in the
+questions. `nome` is used only in messages. If the file is not valid, the tool says
+what is wrong (e.g. `manca il campo 'periodo'` = missing field) and asks for the
+path again.
 
-Un file per ricerca è comodo per rilanciare la stessa ricerca, o più ricerche in
-terminali diversi, senza rispondere ogni volta alle domande.
+`ricerche/esempio.json` has a fixed date: update it before use, otherwise after that
+date the tool answers "periodo vuoto o gia' passato" (empty or past period).
 
-## Cosa mostra il terminale
+### Direct start from a file
 
-Durante un controllo, una barra su una riga per ogni fase:
+```bash
+.venv/bin/python tracker.py ricerche/esempio.json
+```
+
+No questions: language and parameters come from the file. If the file is not valid,
+the tool stops and says why.
+
+Language rule:
+- **direct start:** the file's `lingua` field applies (Italian if missing);
+- **file loaded from the questions:** the language chosen at startup applies, and the
+  tool writes it into the file's `lingua` field, so file and tool stay consistent on
+  the next direct start.
+
+One file per search makes it easy to restart the same search, or several searches in
+different terminals, without answering the questions every time.
+
+## What the terminal shows
+
+During a check, a one-line progress bar for each phase:
 
 ```
 ✓ Calendario [████████████████████████] 40/40 100% · in 44 s · 434 prezzi stimati
@@ -248,7 +303,7 @@ Prezzi dei venditori (agenzie comprese) per 5 A/R in top
 ✓ Venditori  [████████████████████████] 5/5 100% · in 6 min 02 s · minimo 656 EUR
 ```
 
-Alla fine, la top e un conto alla rovescia fino al controllo successivo:
+At the end, the top results and a countdown to the next check:
 
 ```
 Top 5 Roma -> Tokyo/Osaka, ritorno Tokyo/Osaka -> Roma, partenza 2027-02-28 .. 2027-03-20, 14-21 giorni, max 1 scalo
@@ -273,72 +328,73 @@ Confronto varianti (prezzi verificati):
 Prossimo aggiornamento tra 48:25 (alle 23:40)
 ```
 
-Come leggerla:
+How to read it:
 
-- **Prezzo.** "656 EUR su lastminute.com (674 EUR in lista)": il prezzo più basso
-  trovato tra i venditori, e tra parentesi quello mostrato nella lista di Google.
-- **Giudizio.** Confronto con la fascia tipica di Google per quella tratta e il
-  minimo degli ultimi 60 giorni. "BASSO" vicino al minimo dei 60 giorni è un buon
-  segnale per prenotare.
-- **Copertura.** "Stimate" = prezzo indicativo dal calendario. "Verificate" =
-  prezzo vero da una ricerca completa. La top usa solo prezzi verificati.
-- **Confronto varianti.** Il miglior prezzo per ogni combinazione di città. "(stima)"
-  vuol dire che quella variante non è ancora stata verificata.
-- **💡 Suggerimento.** Una partenza fino a 7 giorni prima o dopo il periodo che costa
-  meno della top. Non entra mai nella top.
-- **Due biglietti.** Una proposta con due biglietti di sola andata mostra i due voli
-  con prezzo e link, e l'avviso che non sono collegati: se un volo cambia o salta,
-  l'altro non è protetto.
+- **Price.** "656 EUR su lastminute.com (674 EUR in lista)": the lowest price found
+  among sellers, and in brackets the price shown in Google's list.
+- **Rating.** Compared with Google's typical range for the route and the lowest price
+  of the last 60 days. "BASSO" (low) close to the 60-day minimum is a good sign to book.
+- **Coverage.** "Stimate" (estimated) = indicative price from the calendar.
+  "Verificate" (verified) = real price from a full search. The top list uses only
+  verified prices.
+- **Variant comparison** (`Confronto varianti`). The best price for each city
+  combination. "(stima)" means that variant has not been verified yet.
+- **💡 Suggestion.** A departure up to 7 days before or after the period that costs
+  less than the top. It never enters the top list.
+- **Two tickets.** A proposal with two one-way tickets shows both flights with price
+  and link, and a warning that they are not linked: if one flight changes or is
+  cancelled, the other is not protected.
 
-La top finisce anche in `data/<cartella>/top.txt`.
+The top list is also saved in `data/<folder>/top.txt`.
 
-## Notifiche Telegram
+## Telegram notifications
 
-### Configurazione (una volta)
+### Setup (once)
 
 ```bash
 .venv/bin/python tracker.py --setup-telegram
 ```
 
-1. Su Telegram apri @BotFather, invia `/newbot` e copia il token.
-2. Incolla il token quando il tool lo chiede.
-3. Apri il tuo bot e premi **Avvia**: la tua chat è iscritta.
+1. On Telegram open @BotFather, send `/newbot` and copy the token.
+2. Paste the token when the tool asks for it.
+3. Open your bot and press **Start**: your chat is subscribed.
 
-### Chi riceve le notifiche
+### Who gets the notifications
 
-Chiunque apra il bot e prema **Avvia** (`/start`) riceve le notifiche di tutti i
-tracker attivi e risponde "✅ Iscritto alle notifiche voli". Con `/stop` smette.
+Anyone who opens the bot and presses **Start** (`/start`) receives the notifications of
+every running tracker, and the bot answers "✅ Iscritto alle notifiche voli"
+(subscribed). With `/stop` they stop.
 
-- Mentre un tracker gira, il tool controlla i nuovi messaggi ogni 10 secondi.
-- Se nessun tracker è attivo, l'iscrizione avviene al prossimo avvio (Telegram
-  conserva i messaggi per 24 ore).
-- Chi blocca il bot viene tolto da solo.
-- Chi trova il nome del bot può iscriversi e vedere tratte, date e prezzi:
-  condividilo solo con chi deve vederli.
+- While a tracker is running, the tool checks for new messages every 10 seconds.
+- If no tracker is running, the subscription happens at the next start (Telegram
+  keeps messages for 24 hours).
+- Anyone who blocks the bot is removed automatically.
+- Anyone who finds the bot's name can subscribe and see routes, dates and prices:
+  share it only with people who should see them.
 
-La configurazione è in `telegram.json` (permessi 600, escluso da git). Per togliere
-una chat a mano, cancella il suo numero da `chat_ids`:
+The configuration is in `telegram.json` (permissions 600, excluded from git). To
+remove a chat by hand, delete its number from `chat_ids`:
 
 ```json
 {"token": "123456789:AA...", "chat_ids": [123456789, 987654321], "offset": 0}
 ```
 
-### Messaggi
+### Messages
 
-| Quando | Messaggio |
+| When | Message |
 |---|---|
-| Primo controllo dopo l'avvio | 🚀 Tracker avviato: prezzi migliori attuali, con la top completa |
-| Nuovo prezzo minimo | ✈️ Nuovo prezzo minimo, con la top completa |
-| Controllo finito, nessun minimo nuovo | ✅ Check ok, nessun prezzo migliore trovato, con il minimo attuale |
-| Controllo interrotto da Google | ⚠️ Check interrotto, più ⚠️ Rallento con il nuovo ritmo |
-| Google risponde di nuovo bene | ✅ Accelero |
-| Ctrl+C | ⏹ Tracker fermato da te |
-| Errore imprevisto | ❌ Tracker fermato per un errore, con il messaggio d'errore |
+| First check after start | 🚀 Tracker avviato (tracker started), with the full top list |
+| New lowest price | ✈️ Nuovo prezzo minimo (new lowest price), with the full top list |
+| Check finished, no new lowest price | ✅ Check ok, nessun prezzo migliore trovato, with the current lowest price |
+| Check interrupted by Google | ⚠️ Check interrotto, plus ⚠️ Rallento (slowing down) with the new pace |
+| Google answers normally again | ✅ Accelero (speeding up) |
+| Ctrl+C | ⏹ Tracker fermato da te (stopped by you) |
+| Unexpected error | ❌ Tracker fermato per un errore (stopped by an error), with the error message |
 
-Ogni messaggio di controllo indica l'orario del prossimo. Se non arriva a
-quell'ora, il tracker si è fermato (o il Mac è andato in stop).
+Every check message gives the time of the next check. If nothing arrives by then, the
+tracker has stopped (or the Mac went to sleep).
 
-Esempio di messaggio con la top:
+Example of a message with the top list:
 
 ```
 ✈️ Nuovo prezzo minimo
@@ -368,136 +424,159 @@ Esempio di messaggio con la top:
 ⏱ Prossimo controllo alle 23:40
 ```
 
-## Più ricerche e ripresa dei dati
+## Several searches and resuming data
 
-- Apri un terminale per ogni ricerca e lancia `tracker.py` in ognuno.
-- Ogni combinazione di parametri ha la sua cartella in `data/`.
-- Rilanciando con gli stessi parametri (domande o file), il tool riprende i prezzi
-  già trovati: la copertura non riparte da zero e un prezzo già noto non viene
-  segnalato come "nuovo minimo".
-- Due istanze con parametri identici non possono girare insieme.
-- Tutte le istanze usano lo stesso IP: 2 o 3 insieme vanno bene, di più fanno
-  arrivare prima i limiti di Google.
+- Open one terminal per search and run `tracker.py` in each.
+- Each set of parameters has its own folder in `data/`.
+- Restarting with the same parameters (questions or file) resumes the prices already
+  found: coverage does not start from zero and a known price is not reported as a
+  "new lowest price".
+- Two instances with identical parameters cannot run at the same time.
+- All instances share the same IP: 2 or 3 at once are fine, more make Google's limits
+  arrive sooner.
 
-Esempio utile: un'istanza su tutto il periodo che ti interessa e una piccola su
-pochi giorni dove hai visto un buon prezzo.
+A useful setup: one instance over the whole period you care about, and a small one
+over the few days where you saw a good price.
 
-## Come funziona
+## How it works
 
-Ogni controllo ha tre fasi.
+Each check has three phases.
 
-1. **Calendario (stima veloce).** Il grafico prezzi di Google dà, con una richiesta,
-   il prezzo indicativo di tutte le date di partenza per una coppia di aeroporti:
-   per l'A/R con durata fissa, oppure per la sola andata. Copre tutto in meno di un
-   minuto, ma non vede tutte le tariffe.
-2. **Verifica (prezzo vero).** Ricerca completa sulla singola combinazione, come su
-   Google Flights: prezzo, compagnie, scali, giudizio, link. Ogni controllo
-   verifica, in quest'ordine:
-   - la top attuale;
-   - le 15 combinazioni più economiche secondo il calendario;
-   - a rotazione tutte le altre, prima quelle mai verificate e poi le più vecchie.
+1. **Calendar (quick estimate).** Google's price graph returns, in one request, the
+   indicative price of every departure date for a pair of airports: for a round trip
+   of fixed length, or for a one-way flight. It covers everything in under a minute,
+   but does not see every fare.
+2. **Verification (real price).** A full search on a single combination, as on Google
+   Flights: price, airlines, stops, rating, link. Each check verifies, in this order:
+   - the current top list;
+   - the 15 cheapest combinations according to the calendar;
+   - in rotation, all the others, first the never-verified ones and then the oldest.
+     At least a quarter of each check is always kept for the rotation.
 
-   Così una stima sbagliata prima o poi viene corretta, e ogni prezzo viene
-   aggiornato periodicamente. Con più ricerche del massimo per controllo (100), la
-   prima copertura completa richiede più controlli; dopo, il tool continua ad
-   aggiornare i prezzi più vecchi.
-3. **Venditori.** Per gli A/R in top, il tool apre le pagine di prenotazione degli
-   itinerari più economici e tiene il venditore che costa meno, agenzie comprese.
-   Per i biglietti di sola andata Google non dà i venditori: si usa il prezzo in lista.
+   This way a wrong estimate is eventually corrected, and every price is refreshed
+   periodically. With more searches than the per-check maximum (100), the first full
+   coverage takes several checks; after that the tool keeps refreshing the oldest
+   prices.
+3. **Sellers.** For round trips in the top list, the tool opens the booking pages of
+   the cheapest itineraries and keeps the cheapest seller, agencies included. Google
+   gives no sellers for one-way tickets: the listed price is used.
 
-**Date fuori dal periodo.** Il calendario guarda anche 7 giorni prima e dopo il
-periodo, con le stesse durate. Una richiesta al calendario copre fino a 61 giorni,
-quindi di solito non costa richieste in più. Se la stima più economica fuori dal
-periodo costa meno del meglio nel periodo, il tool la verifica (1 o 2 ricerche) e,
-se il prezzo vero batte la top, la mostra come suggerimento 💡.
+**Dates outside the period.** The calendar also looks 7 days before and after the
+period, with the same trip lengths. One calendar request covers up to 61 days, so this
+usually costs no extra requests. If the cheapest estimate outside the period is lower
+than the best inside it, the tool verifies it (1 or 2 searches) and, if the real price
+beats the top list, shows it as a 💡 suggestion.
 
-## Quante richieste a Google
+## How many requests to Google
 
-Google non pubblica limiti per Google Flights. Il tool parte con un ritmo prudente
-e rallenta da solo.
+Google does not publish limits for Google Flights. The tool starts at a cautious pace
+and slows down by itself.
 
-- Numero di ricerche: una per ogni coppia di date A/R, più una per ogni giorno e
-  città di sola andata. Esempio: Roma → Tokyo/Osaka, 21 giorni di partenza, durata
-  14-21 giorni = 266 ricerche, coperte in 3 controlli.
-- Con un HTTP 429, un captcha o 5 errori di fila il controllo si interrompe e il
-  tool sale di livello. Dopo un controllo senza problemi scende di un livello.
+- Number of searches: one per round-trip date pair, plus one per day and city for
+  one-way flights. Example: Rome → Tokyo/Osaka, 21 departure days, trip length 14-21
+  days = 266 searches, covered in 3 checks.
+- With HTTP 429, a captcha or 5 errors in a row, the check stops and the tool moves up
+  one level. After a clean check it moves down one level.
 
-| Livello | Ricerche per controllo | Pausa | Intervallo (con 30 min) |
+| Level | Searches per check | Pause | Interval (with 30 min) |
 |---|---|---|---|
 | 0 | 100 | 3 s | 30 min |
 | 1 | 50 | 6 s | 60 min |
 | 2 | 25 | 12 s | 120 min |
 | 3 | 12 | 24 s | 240 min |
 
-Costanti in cima a `tracker.py`:
+Constants at the top of `tracker.py`:
 
-| Costante | Default | Significato |
+| Constant | Default | Meaning |
 |---|---|---|
-| `RICERCHE_MAX_PER_GIRO` | 100 | ricerche complete per controllo a ritmo normale |
-| `PAUSA_SECONDI` | 3 | pausa tra due ricerche complete |
-| `VERIFICA_DA_STIMA` | 15 | stime più basse del calendario da verificare a ogni controllo |
-| `ITINERARI_VENDITORI` | 4 | itinerari di cui aprire la pagina di prenotazione |
-| `PAUSA_CALENDARIO` | 1 | pausa tra due richieste al calendario |
-| `GIORNI_FUORI_PERIODO` | 7 | giorni prima/dopo il periodo in cui cercare date più economiche |
+| `RICERCHE_MAX_PER_GIRO` | 100 | full searches per check at normal pace |
+| `PAUSA_SECONDI` | 3 | pause between two full searches |
+| `VERIFICA_DA_STIMA` | 15 | cheapest calendar estimates verified at each check |
+| `ITINERARI_VENDITORI` | 4 | itineraries whose booking page is opened |
+| `PAUSA_CALENDARIO` | 1 | pause between two calendar requests |
+| `GIORNI_FUORI_PERIODO` | 7 | days before/after the period searched for cheaper dates |
 
-## Problemi comuni
+## Troubleshooting
 
-**Su Telegram non arriva niente da ore.** Controlla che il terminale sia aperto e il
-Mac non sia in stop. Ogni controllo manda almeno "✅ Check ok": se manca all'orario
-indicato, il tracker non sta girando.
+**No Telegram messages for hours.** Check that the terminal is open and the Mac is not
+asleep. Every check sends at least "✅ Check ok": if it does not arrive at the stated
+time, the tracker is not running.
 
-**Ho premuto Avvia sul bot e non succede nulla.** Il bot risponde solo mentre un
-tracker è attivo. Avvia un tracker: l'iscrizione arriva entro 10 secondi.
+**I pressed Start on the bot and nothing happens.** The bot answers only while a
+tracker is running. Start a tracker: the subscription arrives within 10 seconds.
 
-**"verificate 100/266 (scansione in corso)".** È normale: ogni controllo fa al
-massimo 100 ricerche complete. Le combinazioni più economiche vengono verificate per
-prime, le altre ai controlli successivi.
+**"verificate 100/266 (scansione in corso)".** This is normal: each check makes at most
+100 full searches. The cheapest combinations are verified first, the others in the
+next checks.
 
-**Dopo un riavvio dice "nessun prezzo migliore".** Il tool ha ripreso i prezzi già
-trovati con gli stessi parametri. Il primo messaggio dopo l'avvio contiene comunque
-la top completa.
+**After a restart it says "nessun prezzo migliore" (no better price).** The tool
+resumed the prices already found with the same parameters. The first message after
+start still contains the full top list.
 
-**Il prezzo che vedo su Google Flights non compare.** Controlla che la data di
-partenza sia nel periodo e che gli scali rientrino nel massimo. Le offerte delle
-agenzie cambiano anche da utente a utente.
+**A price I see on Google Flights does not show up.** Check that the departure date is
+inside the period and that the stops are within the maximum. Agency offers can also
+differ from user to user.
 
-**`errori_rete.log` nella cartella dei dati.** Contiene i messaggi interni della
-libreria di rete (es. `excessive load generating behavior`): Google chiude una
-connessione e il tool ne apre un'altra. Non è un blocco.
+**`errori_rete.log` in the data folder.** It holds the network library's internal
+messages (e.g. `excessive load generating behavior`): Google closes a connection and
+the tool opens another one. It is not a block.
 
-## File
+## Development and tests
 
-| Percorso | Contenuto |
+The tests check the tool's logic without any request to Google or Telegram: dates and
+combinations, JSON files, proposals and comparison, message texts, bot subscriptions
+and a full check with fake answers.
+
+```bash
+.venv/bin/pip install -r requirements-dev.txt
+.venv/bin/python -m pytest
+```
+
+No test uses hand-written dates: dates start from the day the tests run, so they stay
+valid over the years. The code reads the current day only through `oggi()` in
+`tracker.py`, which the tests freeze for the whole run.
+
+On every push GitHub Actions runs the tests on Python 3.11 and 3.13
+(`.github/workflows/test.yml`). The result is in the badge at the top of this page and
+in the repository's **Actions** tab.
+
+## Files
+
+| Path | Content |
 |---|---|
-| `tracker.py` | programma principale |
-| `luoghi.py` | ricerca città e aeroporti (dataset Travelpayouts, cache 30 giorni) |
-| `telegram_bot.py` | configurazione, iscrizioni e invio dei messaggi Telegram |
-| `ricerche/esempio.json` | esempio di parametri da file |
-| `telegram.json` | token del bot e chat iscritte (escluso da git) |
-| `data/<parametri>/top.txt` | ultima top |
-| `data/<parametri>/storico.csv` | tutti i prezzi trovati |
-| `data/<parametri>/prezzi.json` | stato corrente delle ricerche |
-| `data/<parametri>/parametri.json` | parametri della ricerca |
-| `data/<parametri>/errori_rete.log` | messaggi interni della libreria di rete |
+| `tracker.py` | main program |
+| `lingua.py` | Italian and English texts |
+| `luoghi.py` | city and airport lookup (Travelpayouts dataset, 30-day cache) |
+| `telegram_bot.py` | Telegram setup, subscriptions and messages |
+| `ricerche/esempio.json` | example parameter file |
+| `tests/` | automated tests |
+| `.github/workflows/test.yml` | test run on GitHub |
+| `telegram.json` | bot token and subscribed chats (excluded from git) |
+| `data/<parameters>/top.txt` | latest top list |
+| `data/<parameters>/storico.csv` | every price found |
+| `data/<parameters>/prezzi.json` | current state of the searches |
+| `data/<parameters>/parametri.json` | search parameters |
+| `data/<parameters>/errori_rete.log` | network library's internal messages |
 
-## Limiti
+## Limitations
 
-- Usa API interne di Google Flights, non documentate e non ufficiali
-  (tramite [fast-flights](https://github.com/AWeirdDev/fast-flights),
-  [fli](https://github.com/punitarani/fli) e chiamate dirette). Se Google cambia
-  formato, il tool può smettere di funzionare.
-- Google Flights cerca voli solo fino a oggi + 330 giorni (conta il ritorno) e il
-  calendario prezzi fino a oggi + 305. All'avvio il tool mostra la data limite. Le
-  combinazioni oltre il limite vengono cercate man mano che diventano cercabili.
-- Il biglietto unico "multi-città" (andata su una città, ritorno da un'altra) non è
-  supportato: per quella variante il tool combina due biglietti di sola andata.
-- Per i biglietti di sola andata non ci sono i prezzi dei venditori.
-- Prezzi in EUR, 1 adulto, classe economy.
+- Uses internal, undocumented and unofficial Google Flights APIs (through
+  [fast-flights](https://github.com/AWeirdDev/fast-flights),
+  [fli](https://github.com/punitarani/fli) and direct calls). If Google changes the
+  format, the tool may stop working.
+- Google Flights searches flights only up to today + 330 days (the return counts) and
+  the price calendar up to today + 305. The tool shows the limit at startup.
+  Combinations beyond the limit are searched as they become searchable.
+- The single "multi-city" ticket (outbound to one city, return from another) is not
+  supported: for that variant the tool combines two one-way tickets.
+- One-way tickets have no seller prices.
+- Prices in EUR, 1 adult, economy class.
+- The code and the JSON field names are in Italian.
 
-Progetto personale, per uso privato e a basso volume. Le condizioni d'uso di
-Google vietano l'accesso automatico ai suoi servizi: usalo a tuo rischio, senza
-abbassare troppo la frequenza e senza moltiplicare le istanze.
+Personal project, for private and low-volume use. Google's terms of service forbid
+automated access to its services: use it at your own risk, without lowering the
+frequency too much and without multiplying instances.
 
-## Licenza
+## License
 
 [MIT](LICENSE)

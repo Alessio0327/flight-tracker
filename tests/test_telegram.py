@@ -5,6 +5,7 @@ import json
 import pytest
 
 import telegram_bot
+from lingua import t
 
 
 @pytest.fixture
@@ -47,7 +48,7 @@ def test_start_iscrive_e_risponde(bot):
     assert telegram_bot.controlla_iscrizioni() == [2]
     assert bot.config()["chat_ids"] == [1, 2]
     assert bot.config()["offset"] == 11
-    assert bot.inviati == [(2, telegram_bot.BENVENUTO)]
+    assert bot.inviati == [(2, t("bot_benvenuto"))]
 
 
 def test_start_ripetuto_non_duplica(bot):
@@ -60,14 +61,14 @@ def test_stop_toglie_la_chat(bot):
     bot.coda = [messaggio(10, 1, "/stop")]
     telegram_bot.controlla_iscrizioni()
     assert bot.config()["chat_ids"] == []
-    assert bot.inviati == [(1, telegram_bot.CONGEDO)]
+    assert bot.inviati == [(1, t("bot_congedo"))]
 
 
 def test_altri_messaggi_ricevono_aiuto(bot):
     bot.coda = [messaggio(10, 3, "ciao")]
     telegram_bot.controlla_iscrizioni()
     assert bot.config()["chat_ids"] == [1]
-    assert bot.inviati == [(3, telegram_bot.AIUTO)]
+    assert bot.inviati == [(3, t("bot_aiuto"))]
 
 
 def test_offset_salvato_tra_due_controlli(bot):

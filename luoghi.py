@@ -34,7 +34,8 @@ def _norm(s):
 
 
 class Luoghi:
-    def __init__(self):
+    def __init__(self, lingua="it"):
+        self.lingua = lingua
         self.aeroporti = {}  # codice citta' -> [(iata, nome aeroporto)]
         for a in _carica("airports"):
             if a.get("iata_type") == "airport" and a.get("flightable"):
@@ -46,6 +47,9 @@ class Luoghi:
         }
 
     def nome_citta(self, c):
+        """Nome della citta' nella lingua scelta (il dataset e' in italiano, con le traduzioni)."""
+        if self.lingua != "it" and c["name_translations"].get(self.lingua):
+            return c["name_translations"][self.lingua]
         return c.get("name") or c["name_translations"].get("en") or c["code"]
 
     def cerca(self, testo):

@@ -60,7 +60,7 @@ def proposta_ar(p, prezzo_lista=674, venditore=656):
     prezzi = {k: {
         "prezzo": prezzo_lista, "compagnie": "Qatar Airways", "tratte": "FCO-DOH DOH-KIX",
         "link": "https://example.com/?a=1&b=2", "controllato": "x",
-        "venditore": {"prezzo": venditore, "nome": "lastminute.com", "orari": "andata 08:55, ritorno 17:55"},
+        "venditore": {"prezzo": venditore, "nome": "lastminute.com", "ora_andata": "08:55", "ora_ritorno": "17:55"},
         "fascia": [870, 1400], "tipico": 986, "min_60gg": 674,
     }}
     return tracker.proposte_verificate(p, prezzi), prezzi
