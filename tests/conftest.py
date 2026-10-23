@@ -57,8 +57,10 @@ def oggi_fisso(monkeypatch):
 def italiano():
     """Ogni test parte in italiano; i test in inglese usano la fixture `inglese`."""
     lingua.imposta("it")
+    lingua.imposta_valuta("EUR")
     yield
     lingua.imposta("it")
+    lingua.imposta_valuta("EUR")
 
 
 @pytest.fixture

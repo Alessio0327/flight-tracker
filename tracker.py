@@ -32,7 +32,7 @@ import csv
 import fcntl
 import html
 import json
-import os
+import logging
 import re
 import shutil
 import subprocess
@@ -40,6 +40,7 @@ import sys
 import threading
 import time
 import urllib.parse
+import urllib.request
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
@@ -80,6 +81,8 @@ LIMITE_CALENDARIO_GIORNI = 305
 ITINERARI_VENDITORI = 4  # itinerari (orari) di cui aprire la pagina di prenotazione, per combinazione
 PAUSA_CALENDARIO = 1
 GIORNI_FUORI_PERIODO = 7  # giorni prima/dopo il periodo in cui cercare date piu' economiche
+# Servizi per IP pubblico e paese di uscita (Google adatta i prezzi al paese da cui cerchi).
+GEOLOCALIZZAZIONE = ("https://ipinfo.io/json", "https://api.country.is")
 
 
 # --- input utente -----------------------------------------------------------
@@ -215,6 +218,14 @@ def scali(s):
     return intero(0)(s)
 
 
+def valuta(s):
+    if not s:
+        return "EUR"
+    if not re.fullmatch(r"[A-Za-z]{3}", s):
+        raise ValueError(t("formato_valuta"))
+    return s.upper()
+
+
 def scelta(*valori):
     def conv(s):
         if s not in valori:
@@ -340,12 +351,17 @@ def parametri_da_file(percorso, lingua_scelta=None):
             "giorni_min": int(f["durata"]["min"]), "giorni_max": int(f["durata"]["max"]),
             "max_scali": None if f.get("max_scali") is None else int(f["max_scali"]),
             "top": int(f.get("top", 5)), "frequenza_minuti": int(f.get("frequenza_minuti", 30)),
+            "valuta": valuta(str(f.get("valuta") or "")),
             "lingua": lingua.LINGUA,
         }
     except KeyError as e:
         raise ValueError(t("manca_campo", campo=e)) from None
     except (TypeError, AttributeError):
         raise ValueError(t("struttura_non_valida")) from None
+    except ValueError as e:
+        if str(e) == t("formato_valuta"):
+            raise ValueError(t("valuta_non_valida")) from None
+        raise
     if fine < inizio:
         raise ValueError(t("periodo_vuoto"))
     if not 1 <= p["giorni_min"] <= p["giorni_max"]:
@@ -377,7 +393,7 @@ def stampa_riassunto(p):
             ritorno_da=etichetta(p["ritorno"]["da"]), ritorno_a=etichetta(p["ritorno"]["a"]),
             inizio=f"{date.fromisoformat(p['inizio']):%d/%m/%Y}", fine=f"{date.fromisoformat(p['fine']):%d/%m/%Y}",
             min=p["giorni_min"], max=p["giorni_max"], scali=testo_scali(p["max_scali"]),
-            top=p["top"], frequenza=p["frequenza_minuti"]))
+            top=p["top"], frequenza=p["frequenza_minuti"], valuta=p.get("valuta", "EUR")))
 
 
 def testo_scali(n):
@@ -428,6 +444,7 @@ def chiedi_parametri():
     p["max_scali"] = chiedi(t("scali_domanda"), scali)
     p["top"] = chiedi(t("top_domanda"), intero(1))
     p["frequenza_minuti"] = chiedi(t("frequenza_domanda"), intero(1))
+    p["valuta"] = chiedi(t("valuta_domanda"), valuta)
     p["lingua"] = lingua.LINGUA
     return p
 
@@ -611,8 +628,8 @@ def cerca_sola_andata(client, giorno, org, dst, max_scali=None):
 def _cerca(client, viaggio, tratte, max_scali):
     base = create_query(flights=[], trip=viaggio, passengers=Passengers(adults=1))
     tfs = b64encode(base.to_bytes() + b"".join(_tratta(g, da, a, max_scali) for g, da, a in tratte)).decode()
-    params = {"tfs": tfs, "hl": "it", "curr": "EUR"}
-    link = f"{URL}/search?tfs={tfs}&hl={lingua.LINGUA}&curr=EUR"
+    params = {"tfs": tfs, "hl": "it", "curr": lingua.VALUTA}
+    link = f"{URL}/search?tfs={tfs}&hl={lingua.LINGUA}&curr={lingua.VALUTA}"
     r = client.get(URL, params=params)
     controlla_blocco(r)
     script = LexborHTMLParser(r.text).css_first(r"script.ds\:1")
@@ -676,7 +693,11 @@ def descrivi_prezzo(v):
     ven = v.get("venditore") or {}
     if ven.get("prezzo") and ven["prezzo"] < v["prezzo"]:
         return t("prezzo_venditore", prezzo=ven["prezzo"], nome=ven["nome"], lista=v["prezzo"], orari=orari(ven))
-    return f"{v['prezzo']} EUR"
+    return soldi(v["prezzo"])
+
+
+def soldi(prezzo):
+    return f"{prezzo} {lingua.VALUTA}"
 
 
 def orari(ven):
@@ -710,12 +731,12 @@ def prezzo_venditori(cercatore, p, andata, ritorno):
         ],
         seat_type=SeatType.ECONOMY, stops=stops, sort_by=SortBy.CHEAPEST,
     )
-    itinerari = cercatore.search(filtri, top_n=3, currency="EUR", language="it", country="IT") or []
+    itinerari = cercatore.search(filtri, top_n=3, currency=lingua.VALUTA, language="it", country="IT") or []
     # Per l'A/R il prezzo del volo di ritorno e' il totale dell'itinerario.
     itinerari = sorted((it for it in itinerari if it[1].price), key=lambda it: it[1].price)
     meglio = None
     for andata_v, ritorno_v in itinerari[:ITINERARI_VENDITORI]:
-        for o in cercatore.get_booking_options((andata_v, ritorno_v), filtri, currency="EUR", language="it", country="IT"):
+        for o in cercatore.get_booking_options((andata_v, ritorno_v), filtri, currency=lingua.VALUTA, language="it", country="IT"):
             if o.price and (meglio is None or o.price < meglio["prezzo"]):
                 meglio = {
                     "prezzo": round(o.price),
@@ -782,7 +803,7 @@ def calendario(client, org, dst, da, a, durata, max_scali):
         json.dumps([None, json.dumps(filtri, separators=(",", ":"))], separators=(",", ":"))
     )
     r = client.post(
-        CALENDARIO_URL, params={"hl": "it", "curr": "EUR"}, data=corpo,
+        CALENDARIO_URL, params={"hl": "it", "curr": lingua.VALUTA}, data=corpo,
         headers={"content-type": "application/x-www-form-urlencoded;charset=UTF-8"},
     )
     controlla_blocco(r)
@@ -887,6 +908,40 @@ def proposte(p, prezzi_di):
     return sorted(out, key=lambda x: x["prezzo"])
 
 
+def posizione():
+    """IP pubblico e paese da cui escono le richieste (es. VPN), o None se non rilevabile.
+
+    Google Flights adatta risultati e prezzi al paese dell'IP: con una VPN in Francia
+    i prezzi possono essere diversi da quelli visti dall'Italia.
+    """
+    for url in GEOLOCALIZZAZIONE:
+        try:
+            with urllib.request.urlopen(url, timeout=5) as r:
+                d = json.loads(r.read())
+            if d.get("ip") and d.get("country"):
+                return {"ip": d["ip"], "paese": d["country"].upper(), "citta": d.get("city") or ""}
+        except (OSError, ValueError):
+            continue
+    return None
+
+
+def bandiera(paese):
+    """Emoji della bandiera da un codice paese di 2 lettere (es. "FR" -> 🇫🇷)."""
+    paese = paese.upper()
+    return "".join(chr(0x1F1E6 + ord(c) - ord("A")) for c in paese) if len(paese) == 2 and paese.isascii() and paese.isalpha() else ""
+
+
+def testo_posizione(pos):
+    if not pos:
+        return t("posizione_ignota")
+    return t("posizione", bandiera=bandiera(pos["paese"]), paese=pos["paese"],
+             citta=f", {pos['citta']}" if pos["citta"] else "", ip=pos["ip"])
+
+
+def breve_posizione(pos):
+    return f"{bandiera(pos['paese'])} {pos['paese']} (IP {pos['ip']})"
+
+
 def notifica(titolo, testo):
     if sys.platform == "darwin":
         script = f"display notification {json.dumps(testo)} with title {json.dumps(titolo)}"
@@ -908,8 +963,11 @@ def proposte_verificate(p, prezzi):
     return out
 
 
-def giro(p, cartella, client, ritmo, primo=False):
-    """Un giro di ricerche. Ritorna (motivo del blocco o None, messaggio Telegram o None)."""
+def giro(p, cartella, client, ritmo, primo=False, posizione_prima=None):
+    """Un giro di ricerche. Ritorna (motivo del blocco o None, messaggio Telegram o None, posizione).
+
+    Il messaggio c'e' solo con un nuovo prezzo minimo o al primo giro dopo l'avvio.
+    """
     prezzi_path = cartella / "prezzi.json"
     try:
         prezzi = json.loads(prezzi_path.read_text())
@@ -919,6 +977,13 @@ def giro(p, cartella, client, ritmo, primo=False):
     tutte = chiavi(p)
     valide = set(tutte)
     prezzi = {k: v for k, v in prezzi.items() if k in valide}  # date ormai passate
+
+    # Da dove escono le richieste: Google adatta i prezzi al paese dell'IP.
+    pos = posizione()
+    print("\n" + testo_posizione(pos))
+    cambiata = bool(pos and posizione_prima and pos["paese"] != posizione_prima["paese"])
+    if pos and posizione_prima and pos["ip"] != posizione_prima["ip"]:
+        print(t("posizione_cambiata", prima=breve_posizione(posizione_prima), ora=breve_posizione(pos)))
 
     # 1. Stima veloce di tutte le ricerche dal calendario prezzi. Il calendario guarda
     #    anche qualche giorno prima e dopo il periodo: una richiesta copre fino a 61 giorni,
@@ -1009,7 +1074,8 @@ def giro(p, cartella, client, ritmo, primo=False):
                          "venditore": prezzi.get(k, {}).get("venditore") if ris else None}
             if ris:
                 a, b = k.split("|") if k.count("|") == 1 else (k.split("|")[2], k.rsplit("|", 1)[0])
-                storico.writerow([adesso, a, b, ris["prezzo"], ris["compagnie"], ris["tratte"]])
+                storico.writerow([adesso, a, b, ris["prezzo"], ris["compagnie"], ris["tratte"],
+                                  pos["paese"] if pos else ""])
                 f.flush()
                 meglio = proposte_verificate(p, prezzi)
                 if meglio and (minimo is None or meglio[0]["prezzo"] < minimo):
@@ -1046,7 +1112,7 @@ def giro(p, cartella, client, ritmo, primo=False):
                 if ven:
                     prezzi[k]["venditore"] = {**ven, "controllato": adesso}
                     storico.writerow([adesso, andata, ritorno, ven["prezzo"], t("venditore_storico", nome=ven["nome"]),
-                                      orari(ven)])
+                                      orari(ven), pos["paese"] if pos else ""])
                     if minimo is None or ven["prezzo"] < minimo:
                         barra.scrivi(t("nuovo_minimo_venditore", prezzo=ven["prezzo"], nome=ven["nome"],
                                        andata=andata, ritorno=ritorno, orari=orari(ven)))
@@ -1076,10 +1142,15 @@ def giro(p, cartella, client, ritmo, primo=False):
                 break
             cop["migliori"] += 1
     copertura = testo_copertura(cop)
+    if pos:
+        cop["paese"] = pos["paese"]
+        if cambiata:
+            cop["paese_prima"] = posizione_prima["paese"]
     righe = [
         t("top_titolo", n=len(top), tratta=tratta, inizio=p["inizio"], fine=p["fine"], min=p["giorni_min"],
           max=p["giorni_max"], scali=testo_scali(p["max_scali"]), adesso=adesso),
         copertura[0].upper() + copertura[1:],
+        testo_posizione(pos),
         "",
     ]
     for i, x in enumerate(top, 1):
@@ -1103,13 +1174,10 @@ def giro(p, cartella, client, ritmo, primo=False):
     if nuovo or (primo and top):
         titolo = t("tg_nuovo_minimo") if nuovo else t("tg_avviato")
         return bloccato, messaggio_telegram(p, top, prezzi, cop, confronto + ([""] + consiglio if consiglio else []),
-                                            titolo)
-    # Nessun nuovo minimo: messaggio breve, cosi' su Telegram si vede che il controllo e' stato fatto.
-    e = html.escape
-    titolo = t("tg_interrotto") if bloccato else t("tg_check_ok")
-    stato = t("tg_minimo_attuale", testo=e(riassunto(top[0]))) if top else t("tg_nessun_prezzo")
-    return bloccato, (intestazione_telegram(p, titolo, cop) + f"\n\n{stato}"
-                      + (f"\n\n{e(chr(10).join(consiglio))}" if consiglio else ""))
+                                            titolo), pos
+    # Nessun nuovo minimo: niente messaggio. Un blocco di Google arriva comunque come
+    # avviso di rallentamento (main).
+    return bloccato, None, pos
 
 
 def testo_copertura(cop):
@@ -1137,6 +1205,14 @@ def intestazione_telegram(p, titolo, cop):
         t("tg_partenza", inizio=giorno(p["inizio"]), fine=giorno(p["fine"])),
         t("tg_durata", min=p["giorni_min"], max=p["giorni_max"], scali=testo_scali(p["max_scali"]),
           frequenza=p["frequenza_minuti"]),
+    ]
+    # Solo il paese: l'IP non va mandato a tutti gli iscritti del bot.
+    if cop.get("paese_prima"):
+        righe.append(t("tg_posizione_cambiata", prima=f"{bandiera(cop['paese_prima'])} {cop['paese_prima']}",
+                       ora=f"{bandiera(cop['paese'])} {cop['paese']}"))
+    elif cop.get("paese"):
+        righe.append(t("tg_posizione", bandiera=bandiera(cop["paese"]), paese=cop["paese"]))
+    righe += [
         "",
     ]
     if cop["verificate"] == cop["totale"]:
@@ -1179,7 +1255,7 @@ def _gg(x):
 def riassunto(x):
     """Una riga: "701 EUR 2 biglietti, andata Tokyo / ritorno da Osaka, 2027-03-08 -> 2027-03-22"."""
     tipo = f"{t('ar')} {x['va']}" if x["tipo"] == "ar" else t("riassunto_2b", va=x["va"], torna=x["torna"])
-    return f"{x['prezzo']} EUR {tipo}, {x['andata']} -> {x['ritorno']} {t('durata_gg', n=_gg(x))}"
+    return f"{soldi(x['prezzo'])} {tipo}, {x['andata']} -> {x['ritorno']} {t('durata_gg', n=_gg(x))}"
 
 
 def dettaglio(x, prezzi):
@@ -1197,7 +1273,7 @@ def dettaglio(x, prezzi):
              + f"  {x['andata']} -> {x['ritorno']} {t('durata_gg', n=_gg(x))}"]
     larghezza = max(len(t("lato_andata")), len(t("lato_ritorno")))
     for nome, v in ((t("lato_andata"), va), (t("lato_ritorno"), torna)):
-        righe.append(f"   {nome:<{larghezza}} {v['prezzo']} EUR  {v['compagnie']}  [{v['tratte']}]  "
+        righe.append(f"   {nome:<{larghezza}} {soldi(v['prezzo'])}  {v['compagnie']}  [{v['tratte']}]  "
                      f"{t('visto', quando=v['controllato'])}"
                      + (f"  ({giudizio(v).split(':')[0]})" if giudizio(v) else ""))
     righe.append(f"   ⚠ {t('biglietti_separati')}")
@@ -1220,7 +1296,7 @@ def confronto_varianti(p, verificate, stimate):
                                              and z["torna"] == y["nome"]), None)
                 v, st = trova(verificate), trova(stimate) if stimate else None
                 celle.append((v["prezzo"] if v else None, f"{nome} " + (
-                    f"{v['prezzo']} EUR" if v else t("stima", prezzo=st["prezzo"]) if st else t("non_disponibile"))))
+                    soldi(v["prezzo"]) if v else t("stima", prezzo=st["prezzo"]) if st else t("non_disponibile"))))
             righe.append((min((c[0] for c in celle if c[0]), default=None),
                           t("confronto_riga", va=x["nome"], torna=y["nome"]) + " · ".join(c[1] for c in celle)))
     if len(righe) == 1 and len(righe[0][1].split(" · ")) == 1:
@@ -1240,7 +1316,7 @@ def messaggio_telegram(p, top, prezzi, cop, confronto, titolo=None):
         date_txt = f"   📆 {gm(x['andata'])} → {gm(x['ritorno'])} {t('durata_gg', n=_gg(x))}"
         if x["tipo"] == "ar":
             v = prezzi[x["chiavi"][0]]
-            blocco = [f"{i}. <b>{x['prezzo']} EUR</b> · {t('ar')} {e(x['va'])}", date_txt]
+            blocco = [f"{i}. <b>{soldi(x['prezzo'])}</b> · {t('ar')} {e(x['va'])}", date_txt]
             if x["prezzo"] < v["prezzo"]:
                 blocco.append(t("tg_venditore", nome=e(v["venditore"]["nome"]), lista=v["prezzo"],
                                 orari=e(orari(v["venditore"]))))
@@ -1250,10 +1326,10 @@ def messaggio_telegram(p, top, prezzi, cop, confronto, titolo=None):
             blocco.append(f"   🔗 <a href=\"{e(v['link'])}\">{t('tg_apri_google')}</a>")
         else:
             va, torna = (prezzi[k] for k in x["chiavi"])
-            blocco = [f"{i}. <b>{x['prezzo']} EUR</b> · " + t("riassunto_2b", va=e(x["va"]), torna=e(x["torna"])),
+            blocco = [f"{i}. <b>{soldi(x['prezzo'])}</b> · " + t("riassunto_2b", va=e(x["va"]), torna=e(x["torna"])),
                       date_txt]
             for nome, v in ((t("lato_andata"), va), (t("lato_ritorno"), torna)):
-                blocco.append(f"   🛩 {nome} {v['prezzo']} EUR {e(v['compagnie'])} [{e(v['tratte'])}] "
+                blocco.append(f"   🛩 {nome} {soldi(v['prezzo'])} {e(v['compagnie'])} [{e(v['tratte'])}] "
                               f"<a href=\"{e(v['link'])}\">{t('tg_apri')}</a>")
             blocco.append(f"   ⚠️ {t('biglietti_separati')}")
         righe += ["", *blocco]
@@ -1359,7 +1435,21 @@ def nuovo_client():
     return Client(impersonate="chrome_145", impersonate_os="macos", referer=True, headers={"Cookie": CONSENT_COOKIE})
 
 
+def log_rete(file):
+    """Manda in un file i messaggi interni della libreria di rete.
+
+    primp (le richieste a Google) passa i suoi avvisi al logging di Python, ad es.
+    "h2 connection driver error: ... excessive load generating behavior" quando Google
+    chiude una connessione HTTP/2 (il client ne apre un'altra). Senza un handler Python
+    li stamperebbe sul terminale, in mezzo alla barra di avanzamento.
+    """
+    file.parent.mkdir(parents=True, exist_ok=True)
+    logging.basicConfig(filename=file, level=logging.WARNING, force=True,
+                        format="%(asctime)s %(name)s %(levelname)s %(message)s")
+
+
 def main():
+    log_rete(BASE / "data" / "errori_rete.log")  # fino a quando la cartella della ricerca non e' nota
     file_parametri = [a for a in sys.argv[1:] if not a.startswith("--")]
     if file_parametri:
         # Avvio diretto: nessuna domanda, lingua e parametri dal file.
@@ -1378,6 +1468,7 @@ def main():
     telegram_bot.ascolta_in_background()  # /start e /stop di chiunque apra il bot
     if not file_parametri:
         p = chiedi_parametri()
+    lingua.imposta_valuta(p.get("valuta", "EUR"))
     # Per l'A/R sulla stessa citta' il nome e' quello delle versioni precedenti, cosi'
     # le istanze gia' avviate riprendono i loro dati.
     nome = (
@@ -1386,6 +1477,8 @@ def main():
         f"-{p['giorni_min']}-{p['giorni_max']}gg-scali{'X' if p['max_scali'] is None else p['max_scali']}"
         + (f"-rit_{'_'.join(aeroporti(p['ritorno']['da']))}-{'_'.join(aeroporti(p['ritorno']['a']))}"
            if p["tipo"] == "diversa" else "")
+        # In EUR il nome resta quello delle versioni precedenti; un'altra valuta ha i suoi dati.
+        + (f"-{p['valuta']}" if p.get("valuta", "EUR") != "EUR" else "")
     )
     cartella = BASE / "data" / nome
     cartella.mkdir(parents=True, exist_ok=True)
@@ -1403,24 +1496,17 @@ def main():
             future=t("future_breve", n=future) if future else "", cartella=cartella))
     print(t("aggiornamento_ogni", minuti=p["frequenza_minuti"]))
 
-    if sys.stdout.isatty():
-        # primp scrive i suoi errori di connessione direttamente sui descrittori 1 e 2 e
-        # rompe la barra: li mando in un file. print() e gli errori Python restano sul terminale.
-        sys.stdout.flush()
-        sys.stdout = os.fdopen(os.dup(1), "w", buffering=1)
-        sys.stderr = os.fdopen(os.dup(2), "w", buffering=1)
-        with open(cartella / "errori_rete.log", "a") as log:
-            os.dup2(log.fileno(), 1)
-            os.dup2(log.fileno(), 2)
+    log_rete(cartella / "errori_rete.log")
 
     client = nuovo_client()
     ritmo = Ritmo()
     tratta = nome_tratta(p)
-    primo = True
+    primo, pos = True, None
     try:
         while True:
             t0 = time.monotonic()
-            bloccato, messaggio = giro(p, cartella, client, ritmo, primo=primo)
+            bloccato, messaggio, nuova = giro(p, cartella, client, ritmo, primo=primo, posizione_prima=pos)
+            pos = nuova or pos  # se una volta non si rileva, si confronta con l'ultima nota
             primo = False
             avviso = None
             if bloccato and ritmo.livello < Ritmo.LIVELLO_MAX:

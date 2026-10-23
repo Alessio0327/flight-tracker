@@ -4,40 +4,60 @@
 
 🇬🇧 [English](README.md) · 🇮🇹 **Italiano**
 
-Monitor da terminale dei prezzi dei voli su Google Flights.
+**Trova il volo più economico tra centinaia di combinazioni di date, e ti avvisa su
+Telegram quando il prezzo scende.**
 
-Gli dai le città, il periodo di partenza e la durata del viaggio. Ogni N minuti il
-tool prova tutte le combinazioni di date, ti mostra le migliori e ti avvisa su
-Telegram (e con una notifica macOS) quando il prezzo scende.
+flight-tracker è un programma da terminale che interroga Google Flights per te. Gli dici
+dove vuoi andare, in che periodo e per quanti giorni. Lui prova tutte le combinazioni di
+date possibili, ti mostra le più economiche e continua a controllarle ogni ora (o con la
+frequenza che scegli) finché non lo fermi.
 
-- Città al posto dei codici IATA: scrivi "Roma" e scegli Fiumicino, Ciampino o entrambi.
-- Fino a 2 città per lato (es. arrivo Tokyo o Osaka), con i soli aeroporti che ti vanno bene.
-- Ritorno dalla stessa città o da un'altra (es. andata Roma→Tokyo, ritorno Osaka→Roma).
-- Confronto tra andata e ritorno su un biglietto e due biglietti di sola andata.
-- Periodo: un mese, una data ± N giorni, oppure un intervallo di date.
-- Suggerimento di partenze fino a 7 giorni fuori dal periodo, se costano meno.
-- Giudizio sul prezzo (basso / nella media / alto) rispetto alla fascia tipica di Google.
-- Prezzi delle agenzie (lastminute, Gotogate, ...), spesso più bassi del prezzo in lista.
-- Parametri da domande interattive o da un file JSON.
-- Tool in italiano o in inglese: domande, terminale e messaggi Telegram.
-- Notifiche Telegram per chiunque prema Avvia sul bot.
-- Più ricerche in parallelo, una per terminale; i dati restano tra un avvio e l'altro.
-- Rallenta da solo se Google limita le richieste.
+> **Non è un servizio online.** È un programma per uso personale che vive nel terminale
+> del tuo computer: lavora solo mentre il terminale è aperto e il computer acceso e
+> sveglio. Quando chiudi il terminale o il computer va in stop, i controlli si fermano.
 
-## Indice
+## Perché
 
-- [Installazione](#installazione)
-- [Avvio rapido](#avvio-rapido)
-- [Modalità di viaggio](#modalità-di-viaggio)
-- [Inserire i parametri](#inserire-i-parametri)
-- [Cosa mostra il terminale](#cosa-mostra-il-terminale)
-- [Notifiche Telegram](#notifiche-telegram)
-- [Più ricerche e ripresa dei dati](#più-ricerche-e-ripresa-dei-dati)
-- [Come funziona](#come-funziona)
-- [Quante richieste a Google](#quante-richieste-a-google)
-- [Problemi comuni](#problemi-comuni)
-- [Sviluppo e test](#sviluppo-e-test)
-- [Limiti](#limiti)
+Esempio: vuoi andare in Giappone a inizio marzo, per 2 o 3 settimane. Ti va bene
+arrivare a Tokyo o a Osaka, e magari tornare dall'altra città.
+
+Su Google Flights dovresti provare una coppia di date alla volta: partenza dal 23/02 al
+09/03 e durata da 14 a 21 giorni fanno 120 combinazioni solo per l'andata e ritorno, e
+quasi 200 se aggiungi i voli di sola andata tra le due città. Per di più i prezzi
+cambiano ogni giorno, e le agenzie (lastminute, Gotogate, ...) spesso costano meno del
+prezzo mostrato nella lista.
+
+flight-tracker fa quei controlli al posto tuo:
+
+```
+1. 656 EUR su lastminute.com (674 EUR in lista, andata 08:55, ritorno 17:55)  A/R Osaka  2027-03-01 -> 2027-03-16 (15 gg)  Qatar Airways  [FCO-DOH DOH-KIX]
+   Prezzo BASSO: -32% sul tipico 986 EUR, fascia 870-1400 EUR, minimo ultimi 60 gg 674 EUR
+```
+
+In questo caso ha trovato un volo da 656 EUR su un'agenzia, contro i 674 EUR della
+lista di Google e i 986 EUR tipici per quella tratta.
+
+## Cosa fa
+
+- **Prova tutte le date:** periodo di partenza (un mese, una data ± N giorni, o un
+  intervallo) per ogni durata tra un minimo e un massimo.
+- **Città, non codici:** scrivi "Roma" e scegli Fiumicino, Ciampino o entrambi. Fino a 2
+  città per lato (es. Tokyo o Osaka).
+- **Ritorno da un'altra città:** es. andata Roma → Tokyo, ritorno Osaka → Roma.
+- **A/R contro due biglietti:** confronta l'andata e ritorno su un biglietto con due
+  biglietti di sola andata, e ti dice quale variante conviene.
+- **Prezzi delle agenzie:** per i migliori risultati apre le pagine di prenotazione e
+  prende il venditore che costa meno.
+- **Giudizio sul prezzo:** basso, nella media o alto, rispetto alla fascia tipica di
+  Google e al minimo degli ultimi 60 giorni.
+- **Date vicine:** se partire fino a 7 giorni prima o dopo il periodo costa meno, te lo
+  segnala a parte.
+- **Notifiche Telegram:** quando il prezzo scende, a chiunque prema Avvia sul tuo bot.
+- **Paese di ricerca:** mostra IP e paese da cui partono le ricerche (es. con una VPN),
+  perché Google adatta i prezzi al paese.
+- **Italiano o inglese, valuta a scelta** (EUR, USD, GBP, ...).
+- **Lavora da solo per giorni:** riprende i dati dopo un riavvio e rallenta se Google
+  limita le richieste.
 
 ## Installazione
 
@@ -50,84 +70,19 @@ python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
 ```
 
-## Avvio rapido
+## Primo utilizzo
 
-1. (Facoltativo) Collega il bot Telegram, una volta sola:
-   ```bash
-   .venv/bin/python tracker.py --setup-telegram
-   ```
-2. Avvia il tracker (la prima domanda è la lingua, `1` italiano o `2` inglese):
-   ```bash
-   .venv/bin/python tracker.py
-   ```
-3. Rispondi alle domande, oppure scegli `2` e indica un file JSON
-   (es. `ricerche/esempio.json`).
-4. Lascia il terminale aperto. Il tool lavora da solo finché non premi Ctrl+C.
+```bash
+.venv/bin/python tracker.py
+```
 
-## Modalità di viaggio
-
-La prima domanda del percorso interattivo è il tipo di viaggio.
-
-### [1] Andata e ritorno sulla stessa città
-
-Il ritorno parte dalla città di arrivo e torna alla città di partenza.
-Esempio: Roma → Osaka, ritorno Osaka → Roma.
-
-Con due città di arrivo (es. Tokyo e Osaka) il tool cerca entrambe, ma non le
-mescola: andata e ritorno sono sempre sulla stessa città.
-
-Per ogni combinazione di date il tool cerca:
-- l'**andata e ritorno su un unico biglietto** (di solito la più economica sui voli lunghi);
-- **due biglietti di sola andata**, come confronto.
-
-### [2] Ritorno da un'altra città
-
-Scegli separatamente le città dell'andata e quelle del ritorno (1 o 2 per lato).
-Esempio: andata Roma → Tokyo o Osaka, ritorno Tokyo o Osaka → Roma.
-
-Il tool prova tutte le combinazioni di città:
-
-| Variante | Come la cerca |
-|---|---|
-| Andata Tokyo, ritorno da Tokyo | A/R su un biglietto + 2 biglietti di sola andata |
-| Andata Osaka, ritorno da Osaka | A/R su un biglietto + 2 biglietti di sola andata |
-| Andata Tokyo, ritorno da Osaka | 2 biglietti di sola andata |
-| Andata Osaka, ritorno da Tokyo | 2 biglietti di sola andata |
-
-L'A/R su un biglietto vale solo quando il ritorno parte dalla città di arrivo e torna
-alla città di partenza. Per le varianti miste il tool combina due biglietti di sola
-andata, perché il biglietto unico "multi-città" non è disponibile nelle API usate.
-
-Alla fine di ogni controllo trovi il confronto tra le varianti, con la migliore segnata.
-
-### Quale scegliere
-
-| Vuoi... | Tipo | Esempio |
-|---|---|---|
-| Il prezzo migliore verso una città | 1 | Roma → Osaka |
-| Sapere se conviene Tokyo o Osaka | 1, due città di arrivo | Roma → Tokyo, Osaka |
-| Un viaggio con entrata e uscita da città diverse | 2 | Roma → Tokyo, ritorno Osaka → Roma |
-| Tutte le combinazioni tra due città | 2, due città per lato | come sopra, con Tokyo e Osaka su entrambi i lati |
-
-Più città e più giorni vogliono dire più ricerche: vedi
-[Quante richieste a Google](#quante-richieste-a-google).
-
-## Inserire i parametri
-
-All'avvio il tool chiede la lingua (domande, terminale, `top.txt` e Telegram), poi come
-inserire i parametri:
+Il tool fa alcune domande. Ecco una sessione completa per l'esempio del Giappone
+(Invio accetta il valore proposto):
 
 ```
 Lingua / Language: [1] Italiano  [2] English (Invio/Enter = 1): 1
-Parametri: [1] rispondo alle domande  [2] leggo da un file JSON (Invio = 1):
-```
-
-### Con le domande
-
-Esempio con ritorno da un'altra città:
-
-```
-Date cercabili: partenza da domani, ultimo volo entro il 17/09/2027 (limite di Google Flights, oggi + 330 giorni).
+Parametri: [1] rispondo alle domande  [2] leggo da un file JSON (Invio = 1): 1
+Date cercabili: partenza da domani, ultimo volo entro il 18/09/2027 (limite di Google Flights, oggi + 330 giorni).
 
 Tipo di viaggio: [1] andata e ritorno sulla stessa citta'  [2] ritorno da un'altra citta': 2
 ANDATA
@@ -151,23 +106,24 @@ RITORNO
 Quante citta' di partenza del ritorno? [1/2] (Invio = Tokyo (HND, NRT) / Osaka (KIX, ITM)):
 Quante citta' di arrivo del ritorno? [1/2] (Invio = Roma (FCO)):
 Periodo di partenza: [1] un mese  [2] intorno a una data: 2
-Data (es. 15/10/2027): 10/03/27
-Quanti giorni prima/dopo quella data: 10
+Data (es. 15/10/2027): 02/03/27
+Quanti giorni prima/dopo quella data: 7
   Controllo i voli in vendita...
-  Andata: voli in 21 date su 21, solo andata da 562 EUR.
-  Ritorno: voli in 51 date su 51, solo andata da 556 EUR.
+  Andata: voli in 15 date su 15, solo andata da 562 EUR.
+  Ritorno: voli in 45 date su 45, solo andata da 556 EUR.
 Durata minima viaggio (giorni): 14
 Durata massima viaggio (giorni): 21
 Massimo scali per tratta (0 = solo diretti, Invio = qualsiasi): 1
 Quanti migliori risultati mostrare: 5
 Frequenza aggiornamento (minuti): 60
+Valuta dei prezzi (es. EUR, USD, GBP; Invio = EUR):
+
+194 ricerche da monitorare (120 A/R, 74 sole andate). Dati in .../data/FCO-HND_NRT_KIX_ITM-...
+Aggiornamento ogni 60 min (si allunga da solo se Google limita). Ctrl+C per fermare.
 ```
 
-Nel ritorno, Invio riusa le città dell'andata al contrario.
-
-Prima di chiedere la durata, il tool controlla sul calendario di Google che nel
-periodo ci siano voli in vendita. Se non ce ne sono, chiede subito un altro periodo o
-un'altra città, senza farti rispondere alle altre domande.
+Poi il tool lavora da solo. Lascia il terminale aperto e fermalo con Ctrl+C quando hai
+prenotato.
 
 Risposte accettate:
 
@@ -177,27 +133,116 @@ Risposte accettate:
 | Aeroporti | Invio = tutti, oppure numeri separati da virgola: `1,3` |
 | Mese | `10/2027`, `10/27`, `2027-10` |
 | Data | `15/10/2027`, `15/10/27`, `2027-10-15` |
-| Giorni prima/dopo | `10` = 10 giorni prima e 10 dopo la data |
+| Giorni prima/dopo | `7` = 7 giorni prima e 7 dopo la data |
 | Scali | `0` = solo diretti, `1`, `2`, Invio = qualsiasi |
+| Valuta | codice di 3 lettere: `EUR`, `USD`, `GBP`, `JPY`, ... Invio = EUR |
 
-Attenzione al periodo: con `20/03/27` e `10` le partenze vanno dal 10/03 al 30/03.
-Un volo che parte il 03/03 resta fuori (al massimo compare come suggerimento 💡).
+Prima di chiedere la durata, il tool controlla che nel periodo ci siano voli in
+vendita. Se non ce ne sono, chiede subito un altro periodo o un'altra città.
 
-### Da un file JSON
-
-Rispondi `2` e scrivi il percorso del file. Puoi anche trascinare il file nel
-Terminale: apici e spazi protetti vengono tolti da soli. Il tool mostra un riassunto
-e parte senza altre domande:
+## Cosa vedi durante un controllo
 
 ```
-Parametri: [1] rispondo alle domande  [2] leggo da un file JSON (Invio = 1): 2
-Percorso del file JSON: ricerche/esempio.json
-  Andata Roma (FCO) -> Tokyo (HND, NRT) / Osaka (KIX, ITM)
-  Ritorno Tokyo (HND, NRT) / Osaka (KIX, ITM) -> Roma (FCO)
-  Partenza dal 28/02/2027 al 20/03/2027, durata 14-21 giorni, max 1 scalo, top 5, ogni 60 min
+🌍 Ricerche da 🇮🇹 IT, Milan (IP 203.0.113.7)
+
+✓ Calendario [████████████████████████] 40/40 100% · in 44 s · 434 prezzi stimati
+
+Verifica precisa: 100 ricerche (top attuale 0, stime migliori 15, a rotazione 85)
+★ nuovo minimo: 672 EUR A/R Osaka, 2027-03-01 -> 2027-03-22 (21 gg)
+✓ Verifica   [████████████████████████] 100/100 100% · in 7 min 00 s · minimo 672 EUR
+
+Prezzi dei venditori (agenzie comprese) per 5 A/R in top
+★ nuovo minimo: 656 EUR su lastminute.com  2027-03-01 -> 2027-03-16  (andata 08:55, ritorno 17:55)
+✓ Venditori  [████████████████████████] 5/5 100% · in 6 min 02 s · minimo 656 EUR
+
+================================================================================
+Top 5 Roma -> Tokyo/Osaka, ritorno Tokyo/Osaka -> Roma, partenza 2027-02-23 .. 2027-03-09, 14-21 giorni, max 1 scalo
+Stimate 194/194 ricerche, verificate col prezzo completo 100/194 (scansione in corso). Le 15 combinazioni piu'
+economiche secondo il calendario sono gia' verificate; le altre 94 ricerche ai prossimi controlli (massimo 100
+per controllo, per non farsi bloccare da Google)
+🌍 Ricerche da 🇮🇹 IT, Milan (IP 203.0.113.7)
+
+1. 656 EUR su lastminute.com (674 EUR in lista, andata 08:55, ritorno 17:55)  A/R Osaka  2027-03-01 -> 2027-03-16 (15 gg)  Qatar Airways  [FCO-DOH DOH-KIX]
+   Prezzo BASSO: -32% sul tipico 986 EUR, fascia 870-1400 EUR, minimo ultimi 60 gg 674 EUR
+   https://www.google.com/travel/flights/search?tfs=...
+2. ...
+
+Confronto varianti (prezzi verificati):
+  Andata Tokyo, ritorno da Tokyo: A/R 777 EUR · 2 biglietti 1109 EUR
+  Andata Tokyo, ritorno da Osaka: 2 biglietti 1118 EUR
+  Andata Osaka, ritorno da Tokyo: 2 biglietti 1121 EUR
+  Andata Osaka, ritorno da Osaka: A/R 656 EUR · 2 biglietti 1130 EUR  ← migliore
+
+Prossimo aggiornamento tra 48:25 (alle 23:40)
 ```
 
-Esempio di file (`ricerche/esempio.json`):
+Come leggerlo:
+
+| Voce | Significato |
+|---|---|
+| 🌍 Ricerche da | IP e paese da cui partono le richieste. Se cambiano tra due controlli (es. accendi una VPN) compare un avviso: i prezzi possono cambiare con il paese |
+| Calendario | stima veloce di tutte le date dal grafico prezzi di Google |
+| Verifica precisa | ricerca completa, data per data, come su Google Flights |
+| Venditori | prezzi delle agenzie per gli A/R in top |
+| 656 EUR su lastminute.com (674 EUR in lista) | prezzo migliore tra i venditori; tra parentesi quello della lista di Google |
+| Prezzo BASSO | giudizio rispetto alla fascia tipica di Google. BASSO e vicino al minimo dei 60 giorni = buon momento per prenotare |
+| Stimate / verificate | stimate = prezzo indicativo dal calendario; verificate = prezzo vero. La top usa solo prezzi verificati |
+| Confronto varianti | il prezzo migliore per ogni combinazione di città. "(stima)" = non ancora verificato |
+| 💡 Partendo il ... | data fino a 7 giorni fuori dal periodo che costa meno della top (non entra nella top) |
+
+Ogni controllo fa al massimo 100 ricerche complete: con 194 ricerche la copertura completa
+arriva al secondo controllo. Le combinazioni più economiche vengono verificate per prime.
+
+L'ultima top è anche in `data/<ricerca>/top.txt`.
+
+## Che ricerca impostare
+
+### Tipo di viaggio
+
+**[1] Stessa città.** Il ritorno parte dalla città di arrivo e torna a quella di
+partenza. Con due città di arrivo (Tokyo e Osaka) il tool cerca entrambe senza
+mescolarle.
+
+**[2] Ritorno da un'altra città.** Scegli separatamente le città dell'andata e del
+ritorno, e il tool prova tutte le combinazioni:
+
+| Variante | Come la cerca |
+|---|---|
+| Andata Tokyo, ritorno da Tokyo | A/R su un biglietto + 2 biglietti di sola andata |
+| Andata Osaka, ritorno da Osaka | A/R su un biglietto + 2 biglietti di sola andata |
+| Andata Tokyo, ritorno da Osaka | 2 biglietti di sola andata |
+| Andata Osaka, ritorno da Tokyo | 2 biglietti di sola andata |
+
+Il biglietto unico "multi-città" non è disponibile nelle API usate: per le varianti
+miste il tool combina due biglietti di sola andata e ti ricorda che non sono collegati
+(se un volo cambia o salta, l'altro non è protetto).
+
+### Esempi
+
+| Vuoi... | Impostazione |
+|---|---|
+| Il prezzo migliore per Osaka a marzo | tipo 1, Roma → Osaka, mese `03/2027` |
+| Capire se conviene Tokyo o Osaka | tipo 1, Roma → Tokyo e Osaka |
+| Entrare da Tokyo e uscire da Osaka | tipo 2, Roma → Tokyo, ritorno Osaka → Roma |
+| Tutte le combinazioni tra le due città | tipo 2, Tokyo e Osaka su entrambi i lati |
+| Tenere d'occhio un buon prezzo visto su pochi giorni | data ± 3, durata stretta (es. 14-16) |
+
+### Il periodo si conta dalla data
+
+Con data `20/03/27` e `10` giorni, le partenze vanno dal 10/03 al 30/03. Un volo che
+parte il 03/03 resta fuori: al massimo compare come suggerimento 💡 se è entro 7 giorni.
+
+### Quante ricerche
+
+Una per ogni coppia di date A/R, più una per ogni giorno e città di sola andata.
+Più città e più giorni vogliono dire più ricerche e più controlli per la copertura
+completa. Esempi: Roma → Osaka, 9 giorni di partenza, durata 14-21 = 97 ricerche (un
+controllo); l'esempio del Giappone = 194 ricerche (due controlli).
+
+## Parametri da file e avvio diretto
+
+Per non rispondere ogni volta alle domande, salva la ricerca in un file JSON. Esempio, nel
+formato di `ricerche/esempio.json`:
 
 ```json
 {
@@ -216,109 +261,40 @@ Esempio di file (`ricerche/esempio.json`):
     ],
     "a": [{"nome": "Roma", "aeroporti": ["FCO"]}]
   },
-  "periodo": {"data": "10/03/2027", "giorni_prima_dopo": 10},
+  "periodo": {"data": "02/03/2027", "giorni_prima_dopo": 7},
   "durata": {"min": 14, "max": 21},
   "max_scali": 1,
   "top": 5,
-  "frequenza_minuti": 60
+  "frequenza_minuti": 60,
+  "valuta": "EUR"
 }
+```
+
+Due modi di usarlo:
+
+```bash
+# avvio diretto: nessuna domanda, tutto dal file
+.venv/bin/python tracker.py ricerche/esempio.json
+
+# dalle domande: scegli la lingua, poi 2 e il percorso del file
+.venv/bin/python tracker.py
 ```
 
 | Campo | Obbligatorio | Valori |
 |---|---|---|
-| `lingua` | no | `"it"` o `"en"`, default `"it"`. Vale nell'avvio diretto; se carichi il file dalle domande, viene aggiornato con la lingua scelta all'avvio |
+| `lingua` | no | `"it"` o `"en"`, default `"it"`. Vale nell'avvio diretto; se carichi il file dalle domande, il tool lo aggiorna con la lingua scelta |
 | `andata.da`, `andata.a` | sì | 1 o 2 città, ognuna `{"nome": "...", "aeroporti": ["..."]}` |
-| `ritorno.da`, `ritorno.a` | no | come sopra. Senza `ritorno` il viaggio è di tipo 1 (stessa città) |
-| `periodo` | sì | `{"data": "10/03/2027", "giorni_prima_dopo": 10}`, `{"mese": "03/2027"}` oppure `{"dal": "01/03/2027", "al": "20/03/2027"}` |
+| `ritorno.da`, `ritorno.a` | no | come sopra. Senza `ritorno`: stessa città (tipo 1) |
+| `periodo` | sì | `{"data": "02/03/2027", "giorni_prima_dopo": 7}`, `{"mese": "03/2027"}` oppure `{"dal": "01/03/2027", "al": "20/03/2027"}` |
 | `durata` | sì | `{"min": 14, "max": 21}` |
 | `max_scali` | no | `null` o assente = qualsiasi, `0` = solo diretti, `1`, `2` |
 | `top` | no | numero di risultati, default 5 |
 | `frequenza_minuti` | no | minuti tra un controllo e l'altro, default 30 |
+| `valuta` | no | codice di 3 lettere, default `"EUR"` |
 
-Nel file le città vanno scritte con i codici aeroporto: la ricerca per nome vale solo
-nelle domande. Il `nome` serve solo per i messaggi. Se il file non è valido, il tool
-dice cosa non va (es. `manca il campo 'periodo'`) e richiede il percorso.
-
-`ricerche/esempio.json` ha una data fissa: aggiornala prima di usarlo, altrimenti
-dopo quella data il tool risponde "periodo vuoto o gia' passato".
-
-### Avvio diretto da file
-
-```bash
-.venv/bin/python tracker.py ricerche/esempio.json
-```
-
-Nessuna domanda: lingua e parametri vengono dal file. Se il file non è valido, il
-tool si ferma con il motivo.
-
-Regola della lingua:
-- **avvio diretto:** vale il campo `lingua` del file (italiano se manca);
-- **file caricato dalle domande:** vale la lingua scelta all'avvio, e il tool la
-  scrive nel campo `lingua` del file, così al prossimo avvio diretto file e tool
-  restano coerenti.
-
-Un file per ricerca è comodo per rilanciare la stessa ricerca, o più ricerche in
-terminali diversi, senza rispondere ogni volta alle domande.
-
-## Cosa mostra il terminale
-
-Durante un controllo, una barra su una riga per ogni fase:
-
-```
-✓ Calendario [████████████████████████] 40/40 100% · in 44 s · 434 prezzi stimati
-
-Verifica precisa: 100 ricerche (top attuale 5, stime migliori 15, a rotazione 80)
-★ nuovo minimo: 672 EUR A/R Osaka, 2027-03-01 -> 2027-03-22 (21 gg)
-✓ Verifica   [████████████████████████] 100/100 100% · in 7 min 00 s · minimo 672 EUR
-
-Prezzi dei venditori (agenzie comprese) per 5 A/R in top
-★ nuovo minimo: 656 EUR su lastminute.com  2027-03-01 -> 2027-03-22  (andata 08:55, ritorno 17:55)
-✓ Venditori  [████████████████████████] 5/5 100% · in 6 min 02 s · minimo 656 EUR
-```
-
-Alla fine, la top e un conto alla rovescia fino al controllo successivo:
-
-```
-Top 5 Roma -> Tokyo/Osaka, ritorno Tokyo/Osaka -> Roma, partenza 2027-02-28 .. 2027-03-20, 14-21 giorni, max 1 scalo
-Stimate 266/266 ricerche, verificate col prezzo completo 100/266 (scansione in corso). Le 15 combinazioni piu'
-economiche secondo il calendario sono gia' verificate; le altre 166 ricerche ai prossimi controlli (massimo 100
-per controllo, per non farsi bloccare da Google)
-
-1. 656 EUR su lastminute.com (674 EUR in lista, andata 08:55, ritorno 17:55)  A/R Osaka  2027-03-01 -> 2027-03-16 (15 gg)  Qatar Airways  [FCO-DOH DOH-KIX]
-   Prezzo BASSO: -32% sul tipico 986 EUR, fascia 870-1400 EUR, minimo ultimi 60 gg 674 EUR
-   https://www.google.com/travel/flights/search?tfs=...
-...
-
-Confronto varianti (prezzi verificati):
-  Andata Tokyo, ritorno da Tokyo: A/R 777 EUR · 2 biglietti 1109 EUR
-  Andata Tokyo, ritorno da Osaka: 2 biglietti 1118 EUR
-  Andata Osaka, ritorno da Tokyo: 2 biglietti 1121 EUR
-  Andata Osaka, ritorno da Osaka: A/R 656 EUR · 2 biglietti 1130 EUR  ← migliore
-
-💡 Partendo il 26/02 (fuori dal tuo periodo) risparmi 40 EUR: 616 EUR A/R Osaka, 2027-02-26 -> 2027-03-12 (14 gg)
-   https://www.google.com/travel/flights/search?tfs=...
-
-Prossimo aggiornamento tra 48:25 (alle 23:40)
-```
-
-Come leggerla:
-
-- **Prezzo.** "656 EUR su lastminute.com (674 EUR in lista)": il prezzo più basso
-  trovato tra i venditori, e tra parentesi quello mostrato nella lista di Google.
-- **Giudizio.** Confronto con la fascia tipica di Google per quella tratta e il
-  minimo degli ultimi 60 giorni. "BASSO" vicino al minimo dei 60 giorni è un buon
-  segnale per prenotare.
-- **Copertura.** "Stimate" = prezzo indicativo dal calendario. "Verificate" =
-  prezzo vero da una ricerca completa. La top usa solo prezzi verificati.
-- **Confronto varianti.** Il miglior prezzo per ogni combinazione di città. "(stima)"
-  vuol dire che quella variante non è ancora stata verificata.
-- **💡 Suggerimento.** Una partenza fino a 7 giorni prima o dopo il periodo che costa
-  meno della top. Non entra mai nella top.
-- **Due biglietti.** Una proposta con due biglietti di sola andata mostra i due voli
-  con prezzo e link, e l'avviso che non sono collegati: se un volo cambia o salta,
-  l'altro non è protetto.
-
-La top finisce anche in `data/<cartella>/top.txt`.
+Nel file le città si scrivono con i codici aeroporto; `nome` serve solo per i messaggi.
+Se il file non è valido il tool dice cosa non va (es. `manca il campo 'periodo'`).
+L'esempio ha una data fissa: aggiornala prima di usarlo.
 
 ## Notifiche Telegram
 
@@ -330,55 +306,46 @@ La top finisce anche in `data/<cartella>/top.txt`.
 
 1. Su Telegram apri @BotFather, invia `/newbot` e copia il token.
 2. Incolla il token quando il tool lo chiede.
-3. Apri il tuo bot e premi **Avvia**: la tua chat è iscritta.
+3. Apri il tuo bot e premi **Avvia**.
 
-### Chi riceve le notifiche
+Chiunque prema **Avvia** (`/start`) sul tuo bot riceve le notifiche di tutti i tracker
+attivi; con `/stop` smette. Chi trova il nome del bot può iscriversi e vedere tratte,
+date e prezzi: condividilo solo con chi deve vederli. Per togliere una chat a mano,
+cancella il suo numero da `chat_ids` in `telegram.json`.
 
-Chiunque apra il bot e prema **Avvia** (`/start`) riceve le notifiche di tutti i
-tracker attivi e risponde "✅ Iscritto alle notifiche voli". Con `/stop` smette.
-
-- Mentre un tracker gira, il tool controlla i nuovi messaggi ogni 10 secondi.
-- Se nessun tracker è attivo, l'iscrizione avviene al prossimo avvio (Telegram
-  conserva i messaggi per 24 ore).
-- Chi blocca il bot viene tolto da solo.
-- Chi trova il nome del bot può iscriversi e vedere tratte, date e prezzi:
-  condividilo solo con chi deve vederli.
-
-La configurazione è in `telegram.json` (permessi 600, escluso da git). Per togliere
-una chat a mano, cancella il suo numero da `chat_ids`:
-
-```json
-{"token": "123456789:AA...", "chat_ids": [123456789, 987654321], "offset": 0}
-```
-
-### Messaggi
+### Cosa ricevi
 
 | Quando | Messaggio |
 |---|---|
-| Primo controllo dopo l'avvio | 🚀 Tracker avviato: prezzi migliori attuali, con la top completa |
+| Primo controllo dopo l'avvio | 🚀 Tracker avviato, con la top completa |
 | Nuovo prezzo minimo | ✈️ Nuovo prezzo minimo, con la top completa |
-| Controllo finito, nessun minimo nuovo | ✅ Check ok, nessun prezzo migliore trovato, con il minimo attuale |
-| Controllo interrotto da Google | ⚠️ Check interrotto, più ⚠️ Rallento con il nuovo ritmo |
-| Google risponde di nuovo bene | ✅ Accelero |
+| Google limita le richieste | ⚠️ Rallento, con il nuovo ritmo |
+| Google torna normale | ✅ Accelero |
 | Ctrl+C | ⏹ Tracker fermato da te |
-| Errore imprevisto | ❌ Tracker fermato per un errore, con il messaggio d'errore |
+| Errore imprevisto | ❌ Tracker fermato per un errore |
 
-Ogni messaggio di controllo indica l'orario del prossimo. Se non arriva a
-quell'ora, il tracker si è fermato (o il Mac è andato in stop).
+Un controllo senza un prezzo migliore non manda niente: il bot scrive solo quando c'è una
+novità. Il bot non può dirti se il tracker sta girando: è un processo nel terminale del
+tuo computer, non un servizio sempre attivo, e se il computer va in stop o chiudi la
+finestra si ferma senza poter avvisare. Per controllare guarda il terminale (conto alla
+rovescia fino al prossimo controllo) o l'ora di `top.txt`, che si aggiorna a ogni
+controllo.
 
-Esempio di messaggio con la top:
+Ogni messaggio riporta i parametri della ricerca, il paese da cui partono le ricerche
+(mai l'IP) e l'orario del prossimo controllo.
 
 ```
 ✈️ Nuovo prezzo minimo
 
 🛫 Roma (FCO) → Tokyo (HND, NRT) / Osaka (KIX, ITM)
 🛬 Tokyo (HND, NRT) / Osaka (KIX, ITM) → Roma (FCO)
-📅 Partenza dal 28/02/2027 al 20/03/2027
-🧳 Durata min: 14 gg - max: 21 giorni · max 1 scalo · controllo ogni 60 min
+📅 Partenza dal 23/02/2027 al 09/03/2027
+🧳 Durata min: 14 gg - max: 21 giorni · max 1 scalo · controllo ogni 60 min · EUR
+🌍 Ricerche da 🇮🇹 IT
 
-🔎 Scansione in corso: 100/266 ricerche verificate, 266/266 stimate
+🔎 Scansione in corso: 100/194 ricerche verificate, 194/194 stimate
 ✅ Le 15 combinazioni più economiche del calendario sono già verificate
-⏳ Le altre 166 ai prossimi controlli (max 100 per controllo, per non farsi bloccare da Google)
+⏳ Le altre 94 ai prossimi controlli (max 100 per controllo, per non farsi bloccare da Google)
 
 🏆 Top 5
 
@@ -390,65 +357,64 @@ Esempio di messaggio con la top:
    🔗 Apri su Google Flights
 ...
 
-⚖️ Confronto varianti (prezzi verificati)
-  ...
-
 ⏱ Prossimo controllo alle 23:40
 ```
 
-## Più ricerche e ripresa dei dati
+## Farlo girare per giorni
 
-- Apri un terminale per ogni ricerca e lancia `tracker.py` in ognuno.
-- Ogni combinazione di parametri ha la sua cartella in `data/`.
-- Rilanciando con gli stessi parametri (domande o file), il tool riprende i prezzi
-  già trovati: la copertura non riparte da zero e un prezzo già noto non viene
-  segnalato come "nuovo minimo".
-- Due istanze con parametri identici non possono girare insieme.
-- Tutte le istanze usano lo stesso IP: 2 o 3 insieme vanno bene, di più fanno
-  arrivare prima i limiti di Google.
-
-Esempio utile: un'istanza su tutto il periodo che ti interessa e una piccola su
-pochi giorni dove hai visto un buon prezzo.
+- **Più ricerche insieme:** un terminale per ricerca. Ogni ricerca ha la sua cartella in
+  `data/`; due istanze con parametri identici non possono girare insieme. Con 2 o 3
+  istanze sei tranquillo, di più fanno arrivare prima i limiti di Google.
+- **Riavvii:** rilanciando con gli stessi parametri il tool riprende i prezzi già
+  trovati. Il primo messaggio dopo l'avvio contiene comunque la top completa.
+- **Mac sveglio:** se il Mac va in stop i controlli si fermano. Su macOS puoi lanciarlo
+  con `caffeinate`, che tiene sveglio il Mac finché il tool gira:
+  ```bash
+  caffeinate -i .venv/bin/python tracker.py ricerche/esempio.json
+  ```
+- **Valuta e paese:** la stessa ricerca in un'altra valuta ha una cartella separata. Se
+  usi una VPN, ricorda che Google adatta i prezzi al paese dell'IP: lo vedi nella riga 🌍.
 
 ## Come funziona
 
-Ogni controllo ha tre fasi.
+Ogni controllo ha tre fasi:
 
-1. **Calendario (stima veloce).** Il grafico prezzi di Google dà, con una richiesta,
-   il prezzo indicativo di tutte le date di partenza per una coppia di aeroporti:
-   per l'A/R con durata fissa, oppure per la sola andata. Copre tutto in meno di un
-   minuto, ma non vede tutte le tariffe.
-2. **Verifica (prezzo vero).** Ricerca completa sulla singola combinazione, come su
-   Google Flights: prezzo, compagnie, scali, giudizio, link. Ogni controllo
-   verifica, in quest'ordine:
-   - la top attuale;
-   - le 15 combinazioni più economiche secondo il calendario;
-   - a rotazione tutte le altre, prima quelle mai verificate e poi le più vecchie.
+1. **Calendario (stima veloce).** Il grafico prezzi di Google dà, con una richiesta, il
+   prezzo indicativo di tutte le date di partenza per una coppia di aeroporti. Copre
+   tutto in meno di un minuto, ma non vede tutte le tariffe.
+2. **Verifica (prezzo vero).** Ricerca completa sulla singola combinazione. Ogni
+   controllo verifica la top attuale, le 15 combinazioni più economiche secondo il
+   calendario e, a rotazione, tutte le altre (prima le mai verificate, poi le più
+   vecchie). Così anche una stima sbagliata prima o poi viene corretta.
+3. **Venditori.** Per gli A/R in top apre le pagine di prenotazione degli itinerari più
+   economici e tiene il venditore più conveniente, agenzie comprese. Per i biglietti di
+   sola andata Google non dà i venditori: si usa il prezzo in lista.
 
-   Così una stima sbagliata prima o poi viene corretta, e ogni prezzo viene
-   aggiornato periodicamente. Con più ricerche del massimo per controllo (100), la
-   prima copertura completa richiede più controlli; dopo, il tool continua ad
-   aggiornare i prezzi più vecchi.
-3. **Venditori.** Per gli A/R in top, il tool apre le pagine di prenotazione degli
-   itinerari più economici e tiene il venditore che costa meno, agenzie comprese.
-   Per i biglietti di sola andata Google non dà i venditori: si usa il prezzo in lista.
+Il calendario guarda anche 7 giorni prima e dopo il periodo: se lì c'è una data più
+economica, il tool la verifica (1 o 2 ricerche) e la segnala con 💡.
 
-**Date fuori dal periodo.** Il calendario guarda anche 7 giorni prima e dopo il
-periodo, con le stesse durate. Una richiesta al calendario copre fino a 61 giorni,
-quindi di solito non costa richieste in più. Se la stima più economica fuori dal
-periodo costa meno del meglio nel periodo, il tool la verifica (1 o 2 ricerche) e,
-se il prezzo vero batte la top, la mostra come suggerimento 💡.
+All'inizio di ogni controllo il tool chiede a ipinfo.io (o api.country.is) IP e paese
+di uscita: una richiesta per controllo.
 
-## Quante richieste a Google
+### Richieste a Google e come non farsi bloccare
 
-Google non pubblica limiti per Google Flights. Il tool parte con un ritmo prudente
-e rallenta da solo.
+Google non pubblica limiti per Google Flights. Il tool usa un **limitatore adattivo**:
+parte con un ritmo prudente, rallenta da solo quando Google protesta e riaccelera quando
+torna tutto normale.
 
-- Numero di ricerche: una per ogni coppia di date A/R, più una per ogni giorno e
-  città di sola andata. Esempio: Roma → Tokyo/Osaka, 21 giorni di partenza, durata
-  14-21 giorni = 266 ricerche, coperte in 3 controlli.
-- Con un HTTP 429, un captcha o 5 errori di fila il controllo si interrompe e il
-  tool sale di livello. Dopo un controllo senza problemi scende di un livello.
+**Cosa fa a ogni controllo**
+- al massimo 100 ricerche complete, con 3 secondi di pausa tra una e l'altra (circa 6
+  secondi a ricerca, cioè una decina di minuti per controllo);
+- mai più ricerche di quante ne stanno nell'intervallo: con una frequenza di 5 minuti,
+  per esempio, ne fa al massimo 50;
+- circa una richiesta al calendario per coppia di aeroporti e durata, con 1 secondo di
+  pausa;
+- per gli A/R in top, qualche pagina di prenotazione per i prezzi delle agenzie.
+
+**Quando rallenta.** Con un HTTP 429 (troppe richieste), un captcha di Google o 5 errori
+di fila, il tool interrompe il controllo e sale di un livello. A ogni livello dimezza le
+ricerche, raddoppia le pause e raddoppia l'intervallo tra i controlli. Dopo un controllo
+senza problemi scende di un livello. Ogni cambio arriva anche su Telegram.
 
 | Livello | Ricerche per controllo | Pausa | Intervallo (con 30 min) |
 |---|---|---|---|
@@ -457,96 +423,105 @@ e rallenta da solo.
 | 2 | 25 | 12 s | 120 min |
 | 3 | 12 | 24 s | 240 min |
 
-Costanti in cima a `tracker.py`:
+L'avviso `excessive load generating behavior` in `errori_rete.log` **non** è un blocco:
+Google chiude una connessione dopo molte richieste ravvicinate e il tool ne apre
+un'altra. Il blocco vero è il 429 o il captcha.
 
-| Costante | Default | Significato |
+**Parametri consigliati.** Il numero che conta è il totale di ricerche complete all'ora,
+sommando tutte le istanze aperte sullo stesso IP:
+
+```
+ricerche all'ora ≈ istanze × min(100, ricerche della ricerca) × 60 / frequenza in minuti
+```
+
+| Configurazione | Ricerche complete all'ora | Giudizio |
 |---|---|---|
-| `RICERCHE_MAX_PER_GIRO` | 100 | ricerche complete per controllo a ritmo normale |
-| `PAUSA_SECONDI` | 3 | pausa tra due ricerche complete |
-| `VERIFICA_DA_STIMA` | 15 | stime più basse del calendario da verificare a ogni controllo |
-| `ITINERARI_VENDITORI` | 4 | itinerari di cui aprire la pagina di prenotazione |
-| `PAUSA_CALENDARIO` | 1 | pausa tra due richieste al calendario |
-| `GIORNI_FUORI_PERIODO` | 7 | giorni prima/dopo il periodo in cui cercare date più economiche |
+| 1 istanza, frequenza 60 | fino a 100 | tranquillo |
+| 1 istanza, frequenza 30 | fino a 200 | tranquillo |
+| 2 istanze, frequenza 60 | fino a 200 | tranquillo |
+| 3 istanze, frequenza 60 | fino a 300 | al limite |
+| 3 istanze, frequenza 30 | fino a 600 | sconsigliato |
+
+Indicazioni pratiche:
+- **frequenza 30-60 minuti**; 60 se la ricerca ha più di 100 combinazioni (tanto la
+  copertura completa richiede comunque più controlli);
+- **al massimo 2 o 3 istanze** insieme sullo stesso IP;
+- restringi la ricerca invece di moltiplicare le istanze: meno giorni, durate più
+  strette o una città sola danno meno ricerche;
+- **non abbassare** `PAUSA_SECONDI` sotto 3 e non alzare `RICERCHE_MAX_PER_GIRO` sopra 100
+  (costanti in cima a `tracker.py`);
+- se arriva "⚠️ Rallento", lascia lavorare il limitatore; se succede spesso, alza la
+  frequenza o chiudi un'istanza.
+
+Riferimento misurato: in una giornata di prova, con fino a 3 istanze, il tool ha fatto
+circa 1300-1500 richieste (fino a circa 200 ricerche complete all'ora) senza nessun 429
+né captcha. È una misura su un IP, non un limite garantito: Google può cambiare soglie
+in qualsiasi momento.
+
+Le altre costanti in cima a `tracker.py` sono `VERIFICA_DA_STIMA` (stime verificate a
+ogni controllo, 15), `ITINERARI_VENDITORI` (pagine di prenotazione per combinazione, 4),
+`PAUSA_CALENDARIO` (1 s) e `GIORNI_FUORI_PERIODO` (7).
 
 ## Problemi comuni
 
-**Su Telegram non arriva niente da ore.** Controlla che il terminale sia aperto e il
-Mac non sia in stop. Ogni controllo manda almeno "✅ Check ok": se manca all'orario
-indicato, il tracker non sta girando.
+**Su Telegram non arriva niente.** Di solito vuol dire che il prezzo non è sceso: il bot
+scrive solo con un nuovo minimo. Per esserne sicuro controlla che il terminale sia
+aperto, che il Mac non sia in stop e l'ora di `top.txt`.
 
-**Ho premuto Avvia sul bot e non succede nulla.** Il bot risponde solo mentre un
-tracker è attivo. Avvia un tracker: l'iscrizione arriva entro 10 secondi.
+**Ho premuto Avvia sul bot e non succede nulla.** Il bot risponde solo mentre un tracker
+è attivo: avvialo e l'iscrizione arriva entro 10 secondi.
 
-**"verificate 100/266 (scansione in corso)".** È normale: ogni controllo fa al
-massimo 100 ricerche complete. Le combinazioni più economiche vengono verificate per
-prime, le altre ai controlli successivi.
+**"verificate 100/194 (scansione in corso)".** Normale: al massimo 100 ricerche complete
+per controllo. Le più economiche sono già verificate.
 
-**Dopo un riavvio dice "nessun prezzo migliore".** Il tool ha ripreso i prezzi già
-trovati con gli stessi parametri. Il primo messaggio dopo l'avvio contiene comunque
-la top completa.
+**Un prezzo visto su Google Flights non compare.** Controlla che la partenza sia nel
+periodo e gli scali nel massimo. Le offerte delle agenzie cambiano anche da utente a
+utente, e da paese a paese.
 
-**Il prezzo che vedo su Google Flights non compare.** Controlla che la data di
-partenza sia nel periodo e che gli scali rientrino nel massimo. Le offerte delle
-agenzie cambiano anche da utente a utente.
-
-**`errori_rete.log` nella cartella dei dati.** Contiene i messaggi interni della
-libreria di rete (es. `excessive load generating behavior`): Google chiude una
-connessione e il tool ne apre un'altra. Non è un blocco.
+**`errori_rete.log`.** Messaggi interni della libreria di rete, es. `excessive load
+generating behavior`: Google chiude una connessione e il tool ne apre un'altra. Non è
+un blocco.
 
 ## Sviluppo e test
 
-I test controllano la logica del tool senza fare richieste a Google né a Telegram:
-date e combinazioni, file JSON, proposte e confronto, testi dei messaggi, iscrizioni
-al bot e un controllo completo con risposte finte.
+I test controllano la logica senza fare richieste a Google né a Telegram, e non usano
+date scritte a mano (partono dal giorno in cui girano).
 
 ```bash
 .venv/bin/pip install -r requirements-dev.txt
 .venv/bin/python -m pytest
 ```
 
-Nessun test usa date scritte a mano: le date partono dal giorno in cui girano i
-test, quindi restano validi negli anni. Il codice legge il giorno corrente solo da
-`oggi()` in `tracker.py`, che i test bloccano per tutta l'esecuzione.
+A ogni push GitHub Actions li esegue su Python 3.11 e 3.13: il risultato è nel badge in
+cima e nella scheda **Actions**.
 
-A ogni push GitHub Actions esegue i test su Python 3.11 e 3.13
-(`.github/workflows/test.yml`). Il risultato è nel badge in cima a questa pagina e
-nella scheda **Actions** del repository.
-
-## File
-
-| Percorso | Contenuto |
+| File | Contenuto |
 |---|---|
 | `tracker.py` | programma principale |
 | `lingua.py` | testi in italiano e inglese |
 | `luoghi.py` | ricerca città e aeroporti (dataset Travelpayouts, cache 30 giorni) |
-| `telegram_bot.py` | configurazione, iscrizioni e invio dei messaggi Telegram |
-| `ricerche/esempio.json` | esempio di parametri da file |
-| `tests/` | test automatici |
-| `.github/workflows/test.yml` | esecuzione dei test su GitHub |
+| `telegram_bot.py` | iscrizioni e messaggi Telegram |
+| `ricerche/esempio.json` | esempio di parametri |
+| `tests/`, `.github/workflows/test.yml` | test e loro esecuzione su GitHub |
 | `telegram.json` | token del bot e chat iscritte (escluso da git) |
-| `data/<parametri>/top.txt` | ultima top |
-| `data/<parametri>/storico.csv` | tutti i prezzi trovati |
-| `data/<parametri>/prezzi.json` | stato corrente delle ricerche |
-| `data/<parametri>/parametri.json` | parametri della ricerca |
-| `data/<parametri>/errori_rete.log` | messaggi interni della libreria di rete |
+| `data/<ricerca>/` | `top.txt`, `storico.csv` (ogni prezzo trovato, con il paese), `prezzi.json`, `parametri.json`, `errori_rete.log` |
 
 ## Limiti
 
-- Usa API interne di Google Flights, non documentate e non ufficiali
-  (tramite [fast-flights](https://github.com/AWeirdDev/fast-flights),
+- Usa API interne di Google Flights, non documentate e non ufficiali (tramite
+  [fast-flights](https://github.com/AWeirdDev/fast-flights),
   [fli](https://github.com/punitarani/fli) e chiamate dirette). Se Google cambia
   formato, il tool può smettere di funzionare.
-- Google Flights cerca voli solo fino a oggi + 330 giorni (conta il ritorno) e il
-  calendario prezzi fino a oggi + 305. All'avvio il tool mostra la data limite. Le
-  combinazioni oltre il limite vengono cercate man mano che diventano cercabili.
-- Il biglietto unico "multi-città" (andata su una città, ritorno da un'altra) non è
-  supportato: per quella variante il tool combina due biglietti di sola andata.
-- Per i biglietti di sola andata non ci sono i prezzi dei venditori.
-- Prezzi in EUR, 1 adulto, classe economy.
+- Google cerca voli fino a oggi + 330 giorni (conta il ritorno); il calendario prezzi
+  fino a oggi + 305. Le combinazioni oltre il limite vengono cercate quando diventano
+  cercabili.
+- Niente biglietto unico multi-città; niente prezzi dei venditori per la sola andata.
+- Prezzi per 1 adulto, classe economy. La valuta deve essere supportata da Google
+  Flights: il tool controlla solo che il codice abbia 3 lettere.
 
-Progetto personale, per uso privato e a basso volume. Le condizioni d'uso di
-Google vietano l'accesso automatico ai suoi servizi: usalo a tuo rischio, senza
-abbassare troppo la frequenza e senza moltiplicare le istanze.
+Progetto personale, per uso privato e a basso volume. Le condizioni d'uso di Google
+vietano l'accesso automatico ai suoi servizi: usalo a tuo rischio, senza abbassare
+troppo la frequenza e senza moltiplicare le istanze.
 
 ## Licenza
 

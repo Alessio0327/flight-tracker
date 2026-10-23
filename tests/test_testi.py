@@ -125,3 +125,49 @@ def test_nome_tratta():
     diversa = parametri(tipo="diversa")
     assert tracker.nome_tratta(diversa) == "Roma -> Osaka, ritorno Osaka -> Roma"
     assert ROMA["nome"] in tracker.nome_tratta(parametri(arrivi=(OSAKA,)))
+
+
+def test_bandiera():
+    assert tracker.bandiera("FR") == "🇫🇷"
+    assert tracker.bandiera("it") == "🇮🇹"
+    assert tracker.bandiera("EUR") == ""
+    assert tracker.bandiera("") == ""
+
+
+def test_posizione_servizio_di_riserva(monkeypatch):
+    risposte = iter([OSError("rete"), b'{"ip": "203.0.113.7", "country": "fr"}'])
+
+    class Risposta:
+        def __init__(self, dati):
+            self.dati = dati
+
+        def read(self):
+            return self.dati
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    def apri(url, timeout):
+        r = next(risposte)
+        if isinstance(r, Exception):
+            raise r
+        return Risposta(r)
+
+    monkeypatch.setattr(tracker.urllib.request, "urlopen", apri)
+    assert tracker.posizione() == {"ip": "203.0.113.7", "paese": "FR", "citta": ""}
+
+
+def test_messaggi_della_libreria_di_rete_nel_file(tmp_path, capsys):
+    import logging
+    file = tmp_path / "data" / "errori_rete.log"
+    try:
+        tracker.log_rete(file)
+        logging.getLogger("primp").warning("h2 connection driver error: excessive load generating behavior")
+        logging.shutdown()
+        assert "excessive load" in file.read_text()
+        assert "excessive load" not in capsys.readouterr().err
+    finally:
+        logging.basicConfig(force=True, handlers=[logging.NullHandler()])

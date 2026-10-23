@@ -7,6 +7,8 @@ per terminale, top.txt e Telegram.
 
 LINGUE = ("it", "en")
 LINGUA = "it"
+# Valuta dei prezzi (codice ISO 4217): la usano le ricerche su Google e i testi ({valuta}).
+VALUTA = "EUR"
 
 
 def imposta(lingua):
@@ -16,8 +18,14 @@ def imposta(lingua):
     LINGUA = lingua
 
 
+def imposta_valuta(valuta):
+    global VALUTA
+    VALUTA = valuta
+
+
 def t(chiave, **valori):
-    return TESTI[chiave][LINGUE.index(LINGUA)].format(**valori)
+    # {valuta} e' sempre disponibile; un valore passato esplicitamente ha la precedenza.
+    return TESTI[chiave][LINGUE.index(LINGUA)].format(**{"valuta": VALUTA, **valori})
 
 
 TESTI = {
@@ -65,13 +73,17 @@ TESTI = {
     "scali_domanda": ("Massimo scali per tratta (0 = solo diretti, Invio = qualsiasi): ",
                       "Maximum stops per leg (0 = direct only, Enter = any): "),
     "top_domanda": ("Quanti migliori risultati mostrare: ", "How many top results to show: "),
+    "valuta_domanda": ("Valuta dei prezzi (es. EUR, USD, GBP; Invio = EUR): ",
+                       "Price currency (e.g. EUR, USD, GBP; Enter = EUR): "),
     "frequenza_domanda": ("Frequenza aggiornamento (minuti): ", "Update frequency (minutes): "),
     "percorso_domanda": ("Percorso del file JSON: ", "JSON file path: "),
     "riassunto_file": (
         "  Andata {andata_da} -> {andata_a}\n  Ritorno {ritorno_da} -> {ritorno_a}\n"
-        "  Partenza dal {inizio} al {fine}, durata {min}-{max} giorni, {scali}, top {top}, ogni {frequenza} min",
+        "  Partenza dal {inizio} al {fine}, durata {min}-{max} giorni, {scali}, top {top}, ogni {frequenza} min, "
+        "prezzi in {valuta}",
         "  Outbound {andata_da} -> {andata_a}\n  Return {ritorno_da} -> {ritorno_a}\n"
-        "  Departure from {inizio} to {fine}, trip length {min}-{max} days, {scali}, top {top}, every {frequenza} min",
+        "  Departure from {inizio} to {fine}, trip length {min}-{max} days, {scali}, top {top}, every {frequenza} min, "
+        "prices in {valuta}",
     ),
 
     # --- errori di input -------------------------------------------------------
@@ -97,6 +109,8 @@ TESTI = {
     "valori_non_validi": ("top e frequenza_minuti devono essere >= 1, max_scali >= 0",
                           "top and frequenza_minuti must be >= 1, max_scali >= 0"),
     "file_lingua_aggiornata": ("  Lingua del file aggiornata: {file}", "  File language updated: {file}"),
+    "formato_valuta": ("serve un codice di 3 lettere, es. EUR, USD, GBP", "a 3-letter code is needed, e.g. EUR, USD, GBP"),
+    "valuta_non_valida": ('valuta: serve un codice di 3 lettere, es. "EUR"', 'valuta: a 3-letter code is needed, e.g. "EUR"'),
     "lingua_non_valida": ('lingua: usa "it" o "en"', 'lingua: use "it" or "en"'),
 
     # --- controllo del periodo -------------------------------------------------
@@ -123,8 +137,8 @@ TESTI = {
     ),
     "cambia_scelta": ("  Cambia [1] periodo  [2] citta': ", "  Change [1] period  [2] city: "),
     "voli_trovati": (
-        "  {lato}: voli in {date} date su {totale}, solo andata da {prezzo} EUR.",
-        "  {lato}: flights on {date} of {totale} dates, one-way from {prezzo} EUR.",
+        "  {lato}: voli in {date} date su {totale}, solo andata da {prezzo} {valuta}.",
+        "  {lato}: flights on {date} of {totale} dates, one-way from {prezzo} {valuta}.",
     ),
     "calendario_non_vede": (
         "  Dopo il {limite} il calendario non vede: quelle date le verifica la ricerca completa.",
@@ -156,17 +170,17 @@ TESTI = {
     "scali_0": ("solo diretti", "direct only"),
     "scali_1": ("max 1 scalo", "max 1 stop"),
     "scali_n": ("max {n} scali", "max {n} stops"),
-    "prezzo_venditore": ("{prezzo} EUR su {nome} ({lista} EUR in lista, {orari})",
-                         "{prezzo} EUR on {nome} ({lista} EUR listed, {orari})"),
+    "prezzo_venditore": ("{prezzo} {valuta} su {nome} ({lista} {valuta} in lista, {orari})",
+                         "{prezzo} {valuta} on {nome} ({lista} {valuta} listed, {orari})"),
     "orari": ("andata {andata}, ritorno {ritorno}", "outbound {andata}, return {ritorno}"),
     "giudizio_basso": ("BASSO", "LOW"),
     "giudizio_alto": ("ALTO", "HIGH"),
     "giudizio_media_bassa": ("nella media, parte bassa", "typical, lower end"),
     "giudizio_media_alta": ("nella media, parte alta", "typical, upper end"),
     "giudizio_media": ("nella media", "typical"),
-    "giudizio": ("{etichetta}: {diff:+d}% sul tipico {tipico} EUR, fascia {basso}-{alto} EUR",
-                 "{etichetta}: {diff:+d}% vs typical {tipico} EUR, range {basso}-{alto} EUR"),
-    "minimo_60": (", minimo ultimi 60 gg {prezzo} EUR", ", lowest in the last 60 days {prezzo} EUR"),
+    "giudizio": ("{etichetta}: {diff:+d}% sul tipico {tipico} {valuta}, fascia {basso}-{alto} {valuta}",
+                 "{etichetta}: {diff:+d}% vs typical {tipico} {valuta}, range {basso}-{alto} {valuta}"),
+    "minimo_60": (", minimo ultimi 60 gg {prezzo} {valuta}", ", lowest in the last 60 days {prezzo} {valuta}"),
 
     # --- giro ------------------------------------------------------------------
     "barra_calendario": ("Calendario", "Calendar"),
@@ -186,9 +200,9 @@ TESTI = {
     "errore_ricerca": ("[errore] {chiave}: {errore}", "[error] {chiave}: {errore}"),
     "cinque_errori": ("5 errori di fila, probabile limitazione", "5 errors in a row, probably rate-limited"),
     "nuovo_minimo": ("★ nuovo minimo: {testo}", "★ new lowest price: {testo}"),
-    "nuovo_minimo_venditore": ("★ nuovo minimo: {prezzo} EUR su {nome}  {andata} -> {ritorno}  ({orari})",
-                               "★ new lowest price: {prezzo} EUR on {nome}  {andata} -> {ritorno}  ({orari})"),
-    "minimo_barra": ("minimo {prezzo} EUR", "lowest {prezzo} EUR"),
+    "nuovo_minimo_venditore": ("★ nuovo minimo: {prezzo} {valuta} su {nome}  {andata} -> {ritorno}  ({orari})",
+                               "★ new lowest price: {prezzo} {valuta} on {nome}  {andata} -> {ritorno}  ({orari})"),
+    "minimo_barra": ("minimo {prezzo} {valuta}", "lowest {prezzo} {valuta}"),
     "venditori_titolo": ("\nPrezzi dei venditori (agenzie comprese) per {n} A/R in top",
                          "\nSeller prices (agencies included) for {n} round trips in the top list"),
     "http_429_prenotazione": ("HTTP 429 sulle pagine di prenotazione", "HTTP 429 on booking pages"),
@@ -203,6 +217,18 @@ TESTI = {
     ),
     "nessun_prezzo_top": ("Nessun prezzo ancora: date forse non in vendita.", "No prices yet: the dates may not be on sale."),
     "notifica_titolo": ("Volo {tratta}: nuovo minimo", "Flight {tratta}: new lowest price"),
+
+    # --- posizione (IP) -------------------------------------------------------
+    "posizione": ("🌍 Ricerche da {bandiera} {paese}{citta} (IP {ip})", "🌍 Searching from {bandiera} {paese}{citta} (IP {ip})"),
+    "posizione_ignota": ("🌍 Paese di uscita non rilevato (servizio di geolocalizzazione non raggiungibile)",
+                         "🌍 Exit country not detected (geolocation service unreachable)"),
+    "posizione_cambiata": (
+        "⚠️ IP cambiato dall'ultimo controllo: prima {prima}, ora {ora}. I prezzi possono cambiare con il paese.",
+        "⚠️ IP changed since the last check: before {prima}, now {ora}. Prices can change with the country.",
+    ),
+    "tg_posizione": ("🌍 Ricerche da {bandiera} {paese}", "🌍 Searching from {bandiera} {paese}"),
+    "tg_posizione_cambiata": ("⚠️ Paese di uscita cambiato: prima {prima}, ora {ora}",
+                              "⚠️ Exit country changed: before {prima}, now {ora}"),
 
     # --- copertura -------------------------------------------------------------
     "copertura": ("stimate {stimate}/{totale} ricerche, verificate col prezzo completo {verificate}/{totale}",
@@ -223,8 +249,8 @@ TESTI = {
     "due_biglietti": ("2 biglietti", "2 tickets"),
     "durata_gg": ("({n} gg)", "({n} days)"),
     "riassunto_2b": ("2 biglietti, andata {va} / ritorno da {torna}", "2 tickets, outbound {va} / return from {torna}"),
-    "dettaglio_2b": ("{prezzo} EUR  2 biglietti: andata {va}, ritorno da {torna}",
-                     "{prezzo} EUR  2 tickets: outbound {va}, return from {torna}"),
+    "dettaglio_2b": ("{prezzo} {valuta}  2 biglietti: andata {va}, ritorno da {torna}",
+                     "{prezzo} {valuta}  2 tickets: outbound {va}, return from {torna}"),
     "visto": ("visto {quando}", "seen {quando}"),
     "prezzo_giudizio": ("   Prezzo {giudizio}", "   Price {giudizio}"),
     "biglietti_separati": ("biglietti separati: se un volo cambia o salta, l'altro non è protetto",
@@ -232,10 +258,10 @@ TESTI = {
     "tratta_ritorno": ("{andata}, ritorno {da} -> {a}", "{andata}, return {da} -> {a}"),
     "confronto_titolo": ("Confronto varianti (prezzi verificati):", "Variant comparison (verified prices):"),
     "confronto_riga": ("  Andata {va}, ritorno da {torna}: ", "  Outbound {va}, return from {torna}: "),
-    "stima": ("~{prezzo} EUR (stima)", "~{prezzo} EUR (estimate)"),
+    "stima": ("~{prezzo} {valuta} (stima)", "~{prezzo} {valuta} (estimate)"),
     "non_disponibile": ("n.d.", "n/a"),
     "migliore": ("  ← migliore", "  ← best"),
-    "risparmi": ("risparmi {n} EUR", "you save {n} EUR"),
+    "risparmi": ("risparmi {n} {valuta}", "you save {n} {valuta}"),
     "ci_sono_voli": ("ci sono voli", "there are flights"),
     "suggerimento": ("💡 Partendo il {giorno} (fuori dal tuo periodo) {risparmio}: {testo}",
                      "💡 Leaving on {giorno} (outside your period) {risparmio}: {testo}"),
@@ -243,14 +269,9 @@ TESTI = {
     # --- Telegram --------------------------------------------------------------
     "tg_nuovo_minimo": ("✈️ <b>Nuovo prezzo minimo</b>", "✈️ <b>New lowest price</b>"),
     "tg_avviato": ("🚀 <b>Tracker avviato</b>: prezzi migliori attuali", "🚀 <b>Tracker started</b>: current best prices"),
-    "tg_interrotto": ("⚠️ <b>Check interrotto</b>: Google limita le richieste",
-                      "⚠️ <b>Check interrupted</b>: Google is limiting requests"),
-    "tg_check_ok": ("✅ <b>Check ok</b>, nessun prezzo migliore trovato", "✅ <b>Check ok</b>, no better price found"),
-    "tg_minimo_attuale": ("🏆 Minimo attuale: <b>{testo}</b>", "🏆 Current lowest price: <b>{testo}</b>"),
-    "tg_nessun_prezzo": ("Nessun prezzo ancora.", "No prices yet."),
     "tg_partenza": ("📅 Partenza dal {inizio} al {fine}", "📅 Departure from {inizio} to {fine}"),
-    "tg_durata": ("🧳 Durata min: {min} gg - max: {max} giorni · {scali} · controllo ogni {frequenza} min",
-                  "🧳 Trip length min: {min} d - max: {max} days · {scali} · check every {frequenza} min"),
+    "tg_durata": ("🧳 Durata min: {min} gg - max: {max} giorni · {scali} · controllo ogni {frequenza} min · {valuta}",
+                  "🧳 Trip length min: {min} d - max: {max} days · {scali} · check every {frequenza} min · {valuta}"),
     "tg_completa": ("🔎 <b>Scansione completa</b>: {verificate}/{totale} ricerche verificate",
                     "🔎 <b>Scan complete</b>: {verificate}/{totale} searches verified"),
     "tg_in_corso": ("🔎 <b>Scansione in corso</b>: {verificate}/{totale} ricerche verificate, {stimate}/{totale} stimate",
@@ -261,7 +282,7 @@ TESTI = {
                  "⏳ The other {n} in the next checks (max {budget} per check, to avoid being blocked by Google)"),
     "tg_future": ("🔒 Altre {n} non ancora cercabili (voli oltre il {limite})",
                   "🔒 {n} more not searchable yet (flights after {limite})"),
-    "tg_venditore": ("   🏷 su {nome} ({lista} EUR in lista, {orari})", "   🏷 on {nome} ({lista} EUR listed, {orari})"),
+    "tg_venditore": ("   🏷 su {nome} ({lista} {valuta} in lista, {orari})", "   🏷 on {nome} ({lista} {valuta} listed, {orari})"),
     "tg_apri_google": ("Apri su Google Flights", "Open on Google Flights"),
     "tg_apri": ("apri", "open"),
     "tg_confronto": ("⚖️ <b>Confronto varianti</b> (prezzi verificati)", "⚖️ <b>Variant comparison</b> (verified prices)"),

@@ -45,12 +45,13 @@ def google_finto(monkeypatch):
     monkeypatch.setattr(tracker, "SearchFlights", lambda: None)
     monkeypatch.setattr(tracker, "notifica", lambda *a: None)
     monkeypatch.setattr(tracker.time, "sleep", lambda s: None)
+    monkeypatch.setattr(tracker, "posizione", lambda: {"ip": "203.0.113.7", "paese": "IT", "citta": "Milano"})
     return chiamate
 
 
 def test_primo_giro_nuovo_minimo(tmp_path, google_finto, capsys):
     p = parametri(giorni_partenza=3, durata=(14, 15))
-    bloccato, messaggio = tracker.giro(p, tmp_path, None, tracker.Ritmo())
+    bloccato, messaggio, _ = tracker.giro(p, tmp_path, None, tracker.Ritmo())
     out = capsys.readouterr().out
 
     assert bloccato is None
@@ -67,15 +68,14 @@ def test_primo_giro_nuovo_minimo(tmp_path, google_finto, capsys):
     assert tra(58).isoformat() not in top.split("💡")[0]
 
 
-def test_secondo_giro_check_ok_e_avvio(tmp_path, google_finto):
+def test_nessun_messaggio_senza_nuovo_minimo_ma_si_all_avvio(tmp_path, google_finto):
     p = parametri(giorni_partenza=3, durata=(14, 15))
     tracker.giro(p, tmp_path, None, tracker.Ritmo())
 
-    _, messaggio = tracker.giro(p, tmp_path, None, tracker.Ritmo())
-    assert messaggio.startswith("✅ <b>Check ok</b>, nessun prezzo migliore trovato")
-    assert "🏆 Minimo attuale: <b>800 EUR A/R Osaka" in messaggio
+    _, messaggio, _ = tracker.giro(p, tmp_path, None, tracker.Ritmo())
+    assert messaggio is None
 
-    _, messaggio = tracker.giro(p, tmp_path, None, tracker.Ritmo(), primo=True)
+    _, messaggio, _ = tracker.giro(p, tmp_path, None, tracker.Ritmo(), primo=True)
     assert messaggio.startswith("🚀 <b>Tracker avviato</b>")
     assert "🏆 <b>Top" in messaggio
 
@@ -85,7 +85,7 @@ def test_scansione_parziale_e_rotazione(tmp_path, google_finto, monkeypatch):
     p = parametri(giorni_partenza=5, durata=(14, 16))
     totale = len(tracker.chiavi(p))
 
-    _, messaggio = tracker.giro(p, tmp_path, None, tracker.Ritmo())
+    _, messaggio, _ = tracker.giro(p, tmp_path, None, tracker.Ritmo())
     assert "🔎 <b>Scansione in corso</b>" in messaggio
     assert "max 8 per controllo" in messaggio
 
@@ -108,10 +108,10 @@ def test_blocco_di_google(tmp_path, google_finto, monkeypatch):
 
     monkeypatch.setattr(tracker, "scansione_calendario", bloccato)
     p = parametri(giorni_partenza=2, durata=(14, 14))
-    motivo, messaggio = tracker.giro(p, tmp_path, None, tracker.Ritmo())
+    motivo, messaggio, _ = tracker.giro(p, tmp_path, None, tracker.Ritmo())
     assert motivo == "HTTP 429, troppe richieste"
     assert google_finto["ricerche"] == []
-    assert messaggio.startswith("⚠️ <b>Check interrotto</b>")
+    assert messaggio is None  # il blocco arriva come avviso di rallentamento
 
 
 def test_date_passate_tolte_dai_dati(tmp_path, google_finto):
@@ -120,3 +120,32 @@ def test_date_passate_tolte_dai_dati(tmp_path, google_finto):
     p = parametri(giorni_partenza=2, durata=(14, 14))
     tracker.giro(p, tmp_path, None, tracker.Ritmo())
     assert vecchia not in json.loads((tmp_path / "prezzi.json").read_text())
+
+
+def test_posizione_nel_terminale_e_su_telegram(tmp_path, google_finto, capsys):
+    p = parametri(giorni_partenza=2, durata=(14, 14))
+    _, messaggio, pos = tracker.giro(p, tmp_path, None, tracker.Ritmo())
+    out = capsys.readouterr().out
+    assert "🌍 Ricerche da 🇮🇹 IT, Milano (IP 203.0.113.7)" in out
+    assert "🌍 Ricerche da 🇮🇹 IT" in messaggio
+    assert "203.0.113.7" not in messaggio  # l'IP resta nel terminale
+    assert pos["paese"] == "IT"
+    assert "IP 203.0.113.7" in (tmp_path / "top.txt").read_text()
+    assert (tmp_path / "storico.csv").read_text().splitlines()[0].endswith(",IT")
+
+
+def test_paese_cambiato(tmp_path, google_finto, capsys):
+    p = parametri(giorni_partenza=2, durata=(14, 14))
+    prima = {"ip": "198.51.100.1", "paese": "FR", "citta": "Paris"}
+    _, messaggio, _ = tracker.giro(p, tmp_path, None, tracker.Ritmo(), posizione_prima=prima)
+    assert "⚠️ IP cambiato dall'ultimo controllo: prima 🇫🇷 FR (IP 198.51.100.1), ora 🇮🇹 IT" in capsys.readouterr().out
+    assert "⚠️ Paese di uscita cambiato: prima 🇫🇷 FR, ora 🇮🇹 IT" in messaggio
+
+
+def test_posizione_non_rilevata(tmp_path, google_finto, monkeypatch, capsys):
+    monkeypatch.setattr(tracker, "posizione", lambda: None)
+    p = parametri(giorni_partenza=2, durata=(14, 14))
+    _, messaggio, pos = tracker.giro(p, tmp_path, None, tracker.Ritmo())
+    assert pos is None
+    assert "Paese di uscita non rilevato" in capsys.readouterr().out
+    assert "🌍" not in messaggio
