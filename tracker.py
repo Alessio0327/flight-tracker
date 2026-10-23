@@ -225,7 +225,7 @@ def chiedi_periodo():
         centro = chiedi("Data (es. 15/10/2027): ", data)
         delta = chiedi("Quanti giorni prima/dopo quella data: ", intero(0))
         inizio, fine = centro - timedelta(days=delta), centro + timedelta(days=delta)
-    return max(inizio, date.today() + timedelta(days=1)), fine
+    return max(inizio, oggi() + timedelta(days=1)), fine
 
 
 def voli_in_vendita(client, org, dst, inizio, fine):
@@ -320,7 +320,7 @@ def parametri_da_file(percorso):
             inizio, fine = centro - timedelta(days=delta), centro + timedelta(days=delta)
         else:
             inizio, fine = data(str(per["dal"])), data(str(per["al"]))
-        inizio = max(inizio, date.today() + timedelta(days=1))
+        inizio = max(inizio, oggi() + timedelta(days=1))
         p = {
             "tipo": tipo, "andata": andata, "ritorno": ritorno,
             "inizio": inizio.isoformat(), "fine": fine.isoformat(),
@@ -414,8 +414,13 @@ def chiedi_parametri():
 
 # --- ricerca -----------------------------------------------------------------
 
+def oggi():
+    """Data di oggi. Unico punto da cui il codice legge il giorno corrente: i test la sostituiscono."""
+    return date.today()
+
+
 def limite(giorni):
-    return date.today() + timedelta(days=giorni)
+    return oggi() + timedelta(days=giorni)
 
 
 def _giorni(da, a):
@@ -425,7 +430,7 @@ def _giorni(da, a):
 
 
 def finestra_partenze(p):
-    return max(date.fromisoformat(p["inizio"]), date.today() + timedelta(days=1)), date.fromisoformat(p["fine"])
+    return max(date.fromisoformat(p["inizio"]), oggi() + timedelta(days=1)), date.fromisoformat(p["fine"])
 
 
 def finestra_ritorni(p):
@@ -913,8 +918,11 @@ def giro(p, cartella, client, ritmo, primo=False):
         for k in x["chiavi"]:
             if len(da_fare) < budget // 2:
                 aggiungi(k, "top")
+    # Almeno un quarto del budget resta alla rotazione: con un budget piccolo (Google che
+    # limita) top e stime lo userebbero tutto e alcune ricerche non verrebbero mai fatte.
+    max_stime = min(VERIFICA_DA_STIMA, budget - len(da_fare) - budget // 4)
     for x in proposte(p, stime):
-        if sum(1 for m in motivo.values() if m == "stima") >= VERIFICA_DA_STIMA:
+        if sum(1 for m in motivo.values() if m == "stima") >= max_stime:
             break
         for k in x["chiavi"]:
             aggiungi(k, "stima")

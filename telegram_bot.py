@@ -56,10 +56,10 @@ def _config_bloccata():
     with open(LOCK, "w") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
         cfg = json.loads(CONFIG.read_text())
+        prima = json.dumps(cfg, sort_keys=True)
         if "chat_id" in cfg:
             cfg["chat_ids"] = [cfg.pop("chat_id")]
         cfg.setdefault("chat_ids", [])
-        prima = json.dumps(cfg, sort_keys=True)
         yield cfg
         if json.dumps(cfg, sort_keys=True) != prima:
             CONFIG.write_text(json.dumps(cfg))
