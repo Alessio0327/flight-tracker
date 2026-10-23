@@ -1,65 +1,21 @@
 {
   "lingua": "it",
   "andata": {
-    "da": [
-      {
-        "nome": "Roma",
-        "aeroporti": [
-          "FCO"
-        ]
-      }
-    ],
+    "da": [{"nome": "Roma", "aeroporti": ["FCO"]}],
     "a": [
-      {
-        "nome": "Tokyo",
-        "aeroporti": [
-          "HND",
-          "NRT"
-        ]
-      },
-      {
-        "nome": "Osaka",
-        "aeroporti": [
-          "KIX",
-          "ITM"
-        ]
-      }
+      {"nome": "New York", "aeroporti": ["JFK", "EWR"]},
+      {"nome": "Boston", "aeroporti": ["BOS"]}
     ]
   },
   "ritorno": {
     "da": [
-      {
-        "nome": "Tokyo",
-        "aeroporti": [
-          "HND",
-          "NRT"
-        ]
-      },
-      {
-        "nome": "Osaka",
-        "aeroporti": [
-          "KIX",
-          "ITM"
-        ]
-      }
+      {"nome": "New York", "aeroporti": ["JFK", "EWR"]},
+      {"nome": "Boston", "aeroporti": ["BOS"]}
     ],
-    "a": [
-      {
-        "nome": "Roma",
-        "aeroporti": [
-          "FCO"
-        ]
-      }
-    ]
+    "a": [{"nome": "Roma", "aeroporti": ["FCO"]}]
   },
-  "periodo": {
-    "data": "09/03/2027",
-    "giorni_prima_dopo": 10
-  },
-  "durata": {
-    "min": 14,
-    "max": 21
-  },
+  "periodo": {"data": "10/05/2027", "giorni_prima_dopo": 7},
+  "durata": {"min": 10, "max": 14},
   "max_scali": 1,
   "top": 5,
   "frequenza_minuti": 60,

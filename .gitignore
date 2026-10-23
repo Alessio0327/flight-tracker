@@ -11,3 +11,7 @@ telegram.json
 telegram.lock
 
 .DS_Store
+
+# Ricerche personali: si pubblica solo l'esempio
+ricerche/*
+!ricerche/esempio.json

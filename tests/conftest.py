@@ -1,7 +1,7 @@
 """Strumenti comuni ai test.
 
 Nessuna data e' scritta a mano: tutto parte da OGGI, il giorno in cui girano i test,
-cosi' i test restano validi negli anni. Durante i test tracker.oggi() restituisce
+cosi' i test restano validi negli anni. Durante i test ricerca.oggi() restituisce
 sempre OGGI, anche se l'esecuzione attraversa la mezzanotte.
 """
 
@@ -14,7 +14,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import lingua  # noqa: E402
-import tracker  # noqa: E402
+import ricerca  # noqa: E402
 
 OGGI = date.today()
 
@@ -28,7 +28,7 @@ def tra(giorni):
     return OGGI + timedelta(days=giorni)
 
 
-def parametri(tipo="stessa", arrivi=(OSAKA,), ritorno_da=None, tra_giorni=60, giorni_partenza=3,
+def viaggio(tipo="stessa", arrivi=(OSAKA,), ritorno_da=None, tra_giorni=60, giorni_partenza=3,
               durata=(14, 15), max_scali=1, top=5, frequenza=30):
     """Parametri come quelli prodotti dalle domande: partenze per giorni_partenza giorni
     a partire da oggi + tra_giorni."""
@@ -50,7 +50,7 @@ def parametri(tipo="stessa", arrivi=(OSAKA,), ritorno_da=None, tra_giorni=60, gi
 
 @pytest.fixture(autouse=True)
 def oggi_fisso(monkeypatch):
-    monkeypatch.setattr(tracker, "oggi", lambda: OGGI)
+    monkeypatch.setattr(ricerca, "oggi", lambda: OGGI)
 
 
 @pytest.fixture(autouse=True)

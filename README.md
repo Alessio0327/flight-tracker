@@ -18,32 +18,32 @@ often as you choose) until you stop it.
 
 ## Why
 
-Example: you want to go to Japan in early March, for 2 or 3 weeks. Landing in Tokyo or
-Osaka are both fine, and maybe you would fly home from the other city.
+Example: you want to go to the United States in May, for 10 to 14 days. Landing in New
+York or Boston are both fine, and maybe you would fly home from the other city.
 
-On Google Flights you would try one pair of dates at a time: departures from 23/02 to
-09/03 and trips of 14 to 21 days make 120 combinations for round trips alone, and almost
-200 once you add one-way flights between the two cities. On top of that, prices change
+On Google Flights you would try one pair of dates at a time: departures from 03/05 to
+17/05 and trips of 10 to 14 days make 75 combinations for round trips alone, and about
+140 once you add one-way flights between the two cities. On top of that, prices change
 every day, and agencies (lastminute, Gotogate, ...) are often cheaper than the price in
 Google's list.
 
 flight-tracker does those checks for you:
 
 ```
-1. 656 EUR on lastminute.com (674 EUR listed, outbound 08:55, return 17:55)  Round trip Osaka  2027-03-01 -> 2027-03-16 (15 days)  Qatar Airways  [FCO-DOH DOH-KIX]
-   Price LOW: -32% vs typical 986 EUR, range 870-1400 EUR, lowest in the last 60 days 674 EUR
+1. 489 EUR on Gotogate (512 EUR listed, outbound 06:00, return 18:40)  Round trip New York  2027-05-06 -> 2027-05-18 (12 days)  TAP Air Portugal  [FCO-LIS LIS-JFK]
+   Price LOW: -29% vs typical 690 EUR, range 560-950 EUR, lowest in the last 60 days 512 EUR
 ```
 
-Here it found a 656 EUR flight from an agency, against 674 EUR in Google's list and a
-typical 986 EUR for that route.
+Here it found a 489 EUR flight from an agency, against 512 EUR in Google's list and a
+typical 690 EUR for that route.
 
 ## What it does
 
 - **Tries every date:** departure period (a month, a date ± N days, or a range) for every
   trip length between a minimum and a maximum.
 - **Cities, not codes:** type "Rome" and pick Fiumicino, Ciampino or both. Up to 2 cities
-  per side (e.g. Tokyo or Osaka).
-- **Return from a different city:** e.g. Rome → Tokyo, then Osaka → Rome.
+  per side (e.g. New York or Boston).
+- **Return from a different city:** e.g. Rome → New York, then Boston → Rome.
 - **Round trip vs two tickets:** compares a round trip on one ticket with two one-way
   tickets, and tells you which variant is cheaper.
 - **Agency prices:** for the best results it opens the booking pages and keeps the
@@ -76,7 +76,7 @@ python3 -m venv .venv
 .venv/bin/python tracker.py
 ```
 
-The tool asks a few questions. Here is a full session for the Japan example
+The tool asks a few questions. Here is a full session for the New York and Boston example
 (Enter accepts the proposed value):
 
 ```
@@ -92,30 +92,29 @@ How many departure cities? [1/2] (Enter = 1):
   [2] CIA Ciampino
   Airports (Enter = all, or e.g. 1,2): 1
 How many arrival cities? [1/2] (Enter = 1): 2
-  Arrival city 1: tokyo
-  Airports (Enter = all, or e.g. 1,2):
-  Arrival city 2: osaka
-  [1] UKB Kobe
-  [2] KIX Kansai International
-  [3] ITM Itami
-  Airports (Enter = all, or e.g. 1,2): 2,3
+  Arrival city 1: new york
+  [1] JFK John F. Kennedy International
+  [2] LGA LaGuardia
+  [3] EWR Newark Liberty International
+  Airports (Enter = all, or e.g. 1,2): 1,3
+  Arrival city 2: boston
 RETURN
-How many return departure cities? [1/2] (Enter = Tokyo (HND, NRT) / Osaka (KIX, ITM)):
+How many return departure cities? [1/2] (Enter = New York (JFK, EWR) / Boston (BOS)):
 How many return arrival cities? [1/2] (Enter = Rome (FCO)):
+Price currency (e.g. EUR, USD, GBP; Enter = EUR):
 Departure period: [1] a month  [2] around a date: 2
-Date, day/month/year (e.g. 15/10/2027): 02/03/27
+Date, day/month/year (e.g. 15/10/2027): 10/05/27
 How many days before/after that date: 7
   Checking flights on sale...
-  Outbound: flights on 15 of 15 dates, one-way from 562 EUR.
-  Return: flights on 45 of 45 dates, one-way from 556 EUR.
-Minimum trip length (days): 14
-Maximum trip length (days): 21
+  Outbound: flights on 15 of 15 dates, one-way from 289 EUR.
+  Return: flights on 45 of 45 dates, one-way from 305 EUR.
+Minimum trip length (days): 10
+Maximum trip length (days): 14
 Maximum stops per leg (0 = direct only, Enter = any): 1
 How many top results to show: 5
 Update frequency (minutes): 60
-Price currency (e.g. EUR, USD, GBP; Enter = EUR):
 
-194 searches to monitor (120 round trips, 74 one-way). Data in .../data/FCO-HND_NRT_KIX_ITM-...
+143 searches to monitor (round trip: 75, one-way: 68). Data in .../data/FCO-JFK_EWR_BOS-...
 Update every 60 min (gets longer by itself if Google limits requests). Ctrl+C to stop.
 ```
 
@@ -126,7 +125,7 @@ Accepted answers:
 
 | Question | Examples |
 |---|---|
-| City | `rome`, `Tokyo`, airport code `FCO`, city code `ROM` |
+| City | `rome`, `Boston`, airport code `FCO`, city code `ROM` |
 | Airports | Enter = all, or comma-separated numbers: `1,3` |
 | Month | `10/2027`, `10/27`, `2027-10` |
 | Date | `15/10/2027`, `15/10/27`, `2027-10-15` (day/month/year) |
@@ -140,35 +139,35 @@ period. If there are none, it immediately asks for another period or city.
 ## What you see during a check
 
 ```
-🌍 Searching from 🇮🇹 IT, Milan (IP 203.0.113.7)
+🌍 Searching from 🇮🇹 IT, Rome (IP 203.0.113.7)
 
-✓ Calendar   [████████████████████████] 40/40 100% · in 44 s · 434 estimated prices
+✓ Calendar   [████████████████████████] 21/21 100% · in 23 s · 212 estimated prices
 
 Full search: 100 searches (current top 0, best estimates 15, rotation 85)
-★ new lowest price: 672 EUR Round trip Osaka, 2027-03-01 -> 2027-03-22 (21 days)
-✓ Verify     [████████████████████████] 100/100 100% · in 7 min 00 s · lowest 672 EUR
+★ new lowest price: 512 EUR Round trip New York, 2027-05-06 -> 2027-05-18 (12 days)
+✓ Verify     [████████████████████████] 100/100 100% · in 7 min 00 s · lowest 512 EUR
 
-Seller prices (agencies included) for 5 round trips in the top list
-★ new lowest price: 656 EUR on lastminute.com  2027-03-01 -> 2027-03-16  (outbound 08:55, return 17:55)
-✓ Sellers    [████████████████████████] 5/5 100% · in 6 min 02 s · lowest 656 EUR
+Seller prices (agencies included) for the round trips in the top list: 5
+★ new lowest price: 489 EUR on Gotogate  2027-05-06 -> 2027-05-18  (outbound 06:00, return 18:40)
+✓ Sellers    [████████████████████████] 5/5 100% · in 6 min 02 s · lowest 489 EUR
 
 ================================================================================
-Top 5 Rome -> Tokyo/Osaka, return Tokyo/Osaka -> Rome, departure 2027-02-23 .. 2027-03-09, 14-21 days, max 1 stop
-Estimated 194/194 searches, verified with the full price 100/194 (scan in progress). The 15 cheapest combinations
-according to the calendar are already verified; the other 94 searches in the next checks (at most 100 per check,
+Top 5 Rome -> New York/Boston, return New York/Boston -> Rome, departure 2027-05-03 .. 2027-05-17, 10-14 days, max 1 stop
+Estimated 143/143 searches, verified with the full price 100/143 (scan in progress). The 15 cheapest combinations
+according to the calendar are already verified; the other 43 searches in the next checks (at most 100 per check,
 to avoid being blocked by Google)
-🌍 Searching from 🇮🇹 IT, Milan (IP 203.0.113.7)
+🌍 Searching from 🇮🇹 IT, Rome (IP 203.0.113.7)
 
-1. 656 EUR on lastminute.com (674 EUR listed, outbound 08:55, return 17:55)  Round trip Osaka  2027-03-01 -> 2027-03-16 (15 days)  Qatar Airways  [FCO-DOH DOH-KIX]
-   Price LOW: -32% vs typical 986 EUR, range 870-1400 EUR, lowest in the last 60 days 674 EUR
+1. 489 EUR on Gotogate (512 EUR listed, outbound 06:00, return 18:40)  Round trip New York  2027-05-06 -> 2027-05-18 (12 days)  TAP Air Portugal  [FCO-LIS LIS-JFK]
+   Price LOW: -29% vs typical 690 EUR, range 560-950 EUR, lowest in the last 60 days 512 EUR
    https://www.google.com/travel/flights/search?tfs=...
 2. ...
 
 Variant comparison (verified prices):
-  Outbound Tokyo, return from Tokyo: Round trip 777 EUR · 2 tickets 1109 EUR
-  Outbound Tokyo, return from Osaka: 2 tickets 1118 EUR
-  Outbound Osaka, return from Tokyo: 2 tickets 1121 EUR
-  Outbound Osaka, return from Osaka: Round trip 656 EUR · 2 tickets 1130 EUR  ← best
+  Outbound New York, return from New York: Round trip 489 EUR · 2 tickets 641 EUR  ← best
+  Outbound New York, return from Boston: 2 tickets 668 EUR
+  Outbound Boston, return from New York: 2 tickets 655 EUR
+  Outbound Boston, return from Boston: Round trip 534 EUR · 2 tickets 690 EUR
 
 Next update in 48:25 (at 23:40)
 ```
@@ -181,13 +180,13 @@ How to read it:
 | Calendar | quick estimate of every date from Google's price graph |
 | Full search | complete search, date by date, as on Google Flights |
 | Sellers | agency prices for the round trips in the top list |
-| 656 EUR on lastminute.com (674 EUR listed) | best price among sellers; in brackets the price in Google's list |
+| 489 EUR on Gotogate (512 EUR listed) | best price among sellers; in brackets the price in Google's list |
 | Price LOW | rating against Google's typical range. LOW and close to the 60-day minimum = good time to book |
 | Estimated / verified | estimated = indicative price from the calendar; verified = real price. The top list uses verified prices only |
 | Variant comparison | the best price for each city combination. "(estimate)" = not verified yet |
 | 💡 Leaving on ... | a date up to 7 days outside the period that costs less than the top (never in the top list) |
 
-Each check makes at most 100 full searches: with 194 searches, full coverage arrives at
+Each check makes at most 100 full searches: with 143 searches, full coverage arrives at
 the second check. The cheapest combinations are verified first.
 
 The latest top list is also in `data/<search>/top.txt`.
@@ -197,7 +196,7 @@ The latest top list is also in `data/<search>/top.txt`.
 ### Trip type
 
 **[1] Same city.** The return leaves from the arrival city and goes back to the
-departure city. With two arrival cities (Tokyo and Osaka) the tool searches both without
+departure city. With two arrival cities (New York and Boston) the tool searches both without
 mixing them.
 
 **[2] Return from a different city.** You choose outbound and return cities separately,
@@ -205,10 +204,10 @@ and the tool tries every combination:
 
 | Variant | How it is searched |
 |---|---|
-| Outbound Tokyo, return from Tokyo | round trip on one ticket + two one-way tickets |
-| Outbound Osaka, return from Osaka | round trip on one ticket + two one-way tickets |
-| Outbound Tokyo, return from Osaka | two one-way tickets |
-| Outbound Osaka, return from Tokyo | two one-way tickets |
+| Outbound New York, return from New York | round trip on one ticket + two one-way tickets |
+| Outbound Boston, return from Boston | round trip on one ticket + two one-way tickets |
+| Outbound New York, return from Boston | two one-way tickets |
+| Outbound Boston, return from New York | two one-way tickets |
 
 A single "multi-city" ticket is not available in the APIs used: for mixed variants the
 tool combines two one-way tickets and reminds you they are not linked (if one flight
@@ -218,23 +217,23 @@ changes or is cancelled, the other is not protected).
 
 | You want... | Setup |
 |---|---|
-| The best price to Osaka in March | type 1, Rome → Osaka, month `03/2027` |
-| To know whether Tokyo or Osaka is cheaper | type 1, Rome → Tokyo and Osaka |
-| To fly into Tokyo and out of Osaka | type 2, Rome → Tokyo, return Osaka → Rome |
-| Every combination of the two cities | type 2, Tokyo and Osaka on both sides |
-| To watch a good price seen on a few days | date ± 3, narrow trip length (e.g. 14-16) |
+| The best price to Boston in May | type 1, Rome → Boston, month `05/2027` |
+| To know whether New York or Boston is cheaper | type 1, Rome → New York and Boston |
+| To fly into New York and out of Boston | type 2, Rome → New York, return Boston → Rome |
+| Every combination of the two cities | type 2, New York and Boston on both sides |
+| To watch a good price seen on a few days | date ± 3, narrow trip length (e.g. 10-12) |
 
 ### The period is counted from the date
 
-With date `20/03/27` and `10` days, departures go from 10/03 to 30/03. A flight leaving
-on 03/03 is outside: at most it appears as a 💡 suggestion if it is within 7 days.
+With date `20/05/27` and `10` days, departures go from 10/05 to 30/05. A flight leaving
+on 03/05 is outside: at most it appears as a 💡 suggestion if it is within 7 days.
 
 ### How many searches
 
 One per round-trip date pair, plus one per day and city for one-way flights. More
 cities and more days mean more searches and more checks to full coverage. Examples:
-Rome → Osaka, 9 departure days, trip length 14-21 = 97 searches (one check); the Japan
-example = 194 searches (two checks).
+Rome → Boston, 9 departure days, trip length 10-14 = 67 searches (one check); the New York
+and Boston example = 143 searches (two checks).
 
 ## Parameter file and direct start
 
@@ -247,19 +246,19 @@ format of `ricerche/esempio.json` (field names are in Italian):
   "andata": {
     "da": [{"nome": "Rome", "aeroporti": ["FCO"]}],
     "a": [
-      {"nome": "Tokyo", "aeroporti": ["HND", "NRT"]},
-      {"nome": "Osaka", "aeroporti": ["KIX", "ITM"]}
+      {"nome": "New York", "aeroporti": ["JFK", "EWR"]},
+      {"nome": "Boston", "aeroporti": ["BOS"]}
     ]
   },
   "ritorno": {
     "da": [
-      {"nome": "Tokyo", "aeroporti": ["HND", "NRT"]},
-      {"nome": "Osaka", "aeroporti": ["KIX", "ITM"]}
+      {"nome": "New York", "aeroporti": ["JFK", "EWR"]},
+      {"nome": "Boston", "aeroporti": ["BOS"]}
     ],
     "a": [{"nome": "Rome", "aeroporti": ["FCO"]}]
   },
-  "periodo": {"data": "02/03/2027", "giorni_prima_dopo": 7},
-  "durata": {"min": 14, "max": 21},
+  "periodo": {"data": "10/05/2027", "giorni_prima_dopo": 7},
+  "durata": {"min": 10, "max": 14},
   "max_scali": 1,
   "top": 5,
   "frequenza_minuti": 60,
@@ -282,8 +281,8 @@ Two ways to use it:
 | `lingua` (language) | no | `"it"` or `"en"`, default `"it"`. Used on direct start; when you load the file from the questions, the tool updates it with the chosen language |
 | `andata.da`, `andata.a` (outbound from / to) | yes | 1 or 2 cities, each `{"nome": "...", "aeroporti": ["..."]}` |
 | `ritorno.da`, `ritorno.a` (return from / to) | no | same format. Without `ritorno`: same city (type 1) |
-| `periodo` (period) | yes | `{"data": "02/03/2027", "giorni_prima_dopo": 7}`, `{"mese": "03/2027"}` or `{"dal": "01/03/2027", "al": "20/03/2027"}` |
-| `durata` (trip length) | yes | `{"min": 14, "max": 21}` |
+| `periodo` (period) | yes | `{"data": "10/05/2027", "giorni_prima_dopo": 7}`, `{"mese": "05/2027"}` or `{"dal": "01/05/2027", "al": "20/05/2027"}` |
+| `durata` (trip length) | yes | `{"min": 10, "max": 14}` |
 | `max_scali` (max stops) | no | `null` or missing = any, `0` = direct only, `1`, `2` |
 | `top` | no | number of results, default 5 |
 | `frequenza_minuti` | no | minutes between checks, default 30 |
@@ -333,23 +332,23 @@ IP) and the time of the next check.
 ```
 ✈️ New lowest price
 
-🛫 Rome (FCO) → Tokyo (HND, NRT) / Osaka (KIX, ITM)
-🛬 Tokyo (HND, NRT) / Osaka (KIX, ITM) → Rome (FCO)
-📅 Departure from 23/02/2027 to 09/03/2027
-🧳 Trip length min: 14 d - max: 21 days · max 1 stop · check every 60 min · EUR
+🛫 Rome (FCO) → New York (JFK, EWR) / Boston (BOS)
+🛬 New York (JFK, EWR) / Boston (BOS) → Rome (FCO)
+📅 Departure from 03/05/2027 to 17/05/2027
+🧳 Trip length min: 10 d - max: 14 days · max 1 stop · check every 60 min · EUR
 🌍 Searching from 🇮🇹 IT
 
-🔎 Scan in progress: 100/194 searches verified, 194/194 estimated
+🔎 Scan in progress: 100/143 searches verified, 143/143 estimated
 ✅ The 15 cheapest combinations in the calendar are already verified
-⏳ The other 94 in the next checks (max 100 per check, to avoid being blocked by Google)
+⏳ The other 43 in the next checks (max 100 per check, to avoid being blocked by Google)
 
 🏆 Top 5
 
-1. 656 EUR · Round trip Osaka
-   📆 01/03 → 16/03 (15 days)
-   🏷 on lastminute.com (674 EUR listed, outbound 08:55, return 17:55)
-   🛩 Qatar Airways [FCO-DOH DOH-KIX]
-   📊 LOW: -32% vs typical 986 EUR, range 870-1400 EUR, lowest in the last 60 days 674 EUR
+1. 489 EUR · Round trip New York
+   📆 06/05 → 18/05 (12 days)
+   🏷 on Gotogate (512 EUR listed, outbound 06:00, return 18:40)
+   🛩 TAP Air Portugal [FCO-LIS LIS-JFK]
+   📊 LOW: -29% vs typical 690 EUR, range 560-950 EUR, lowest in the last 60 days 512 EUR
    🔗 Open on Google Flights
 ...
 
@@ -445,7 +444,7 @@ Practical advice:
 - narrow the search instead of multiplying instances: fewer days, tighter trip lengths
   or a single city mean fewer searches;
 - **do not lower** `PAUSA_SECONDI` below 3 and do not raise `RICERCHE_MAX_PER_GIRO` above
-  100 (constants at the top of `tracker.py`);
+  100 (constants at the top of `ricerca.py`);
 - if "⚠️ Slowing down" arrives, let the limiter work; if it happens often, raise the
   frequency or close an instance.
 
@@ -454,8 +453,8 @@ requests (up to about 200 full searches per hour) without any 429 or captcha. Th
 measurement on one IP, not a guaranteed limit: Google can change its thresholds at any
 time.
 
-The other constants at the top of `tracker.py` are `VERIFICA_DA_STIMA` (estimates
-verified at each check, 15), `ITINERARI_VENDITORI` (booking pages per combination, 4),
+The other constants are `VERIFICA_DA_STIMA` (estimates
+verified at each check, 15), `ITINERARI_VENDITORI` (booking pages per combination, 4, in `google_flights.py`),
 `PAUSA_CALENDARIO` (1 s) and `GIORNI_FUORI_PERIODO` (7).
 
 ## Troubleshooting
@@ -467,7 +466,7 @@ the Mac is not asleep and the time of `top.txt`.
 **I pressed Start on the bot and nothing happens.** The bot answers only while a
 tracker is running: start one and the subscription arrives within 10 seconds.
 
-**"verified 100/194 (scan in progress)".** Normal: at most 100 full searches per check.
+**"verified 100/143 (scan in progress)".** Normal: at most 100 full searches per check.
 The cheapest ones are already verified.
 
 **A price seen on Google Flights does not show up.** Check that the departure is in the
@@ -493,7 +492,11 @@ badge at the top and in the **Actions** tab.
 
 | File | Content |
 |---|---|
-| `tracker.py` | main program |
+| `tracker.py` | startup and check loop |
+| `parametri.py` | startup questions, period check, JSON file |
+| `ricerca.py` | dates, combinations, Google limits, proposals, pace |
+| `google_flights.py` | requests to Google Flights and exit IP |
+| `interfaccia.py` | top list texts, Telegram messages, progress bar |
 | `lingua.py` | Italian and English texts |
 | `luoghi.py` | city and airport lookup (Travelpayouts dataset, 30-day cache) |
 | `telegram_bot.py` | Telegram subscriptions and messages |
