@@ -54,7 +54,7 @@ from pathlib import Path
 from fli.search import SearchFlights
 
 from blocco import blocca
-from google_flights import Bloccato, nuovo_client
+from google_flights import Bloccato, FormatoCambiato, nuovo_client
 from interfaccia import (
     Barra, breve_posizione, confronto_varianti, conto_alla_rovescia, dettaglio, messaggio_telegram,
     nome_tratta, orari, riassunto, suggerimento, testo_copertura, testo_durata, testo_obiettivo, testo_posizione,
@@ -73,7 +73,7 @@ import ricerca
 import telegram_bot
 
 
-VERSIONE = "1.5.0"  # da aggiornare insieme a CHANGELOG.md a ogni nuova versione
+VERSIONE = "1.6.0"  # da aggiornare insieme a CHANGELOG.md a ogni nuova versione
 BASE = Path(__file__).resolve().parent
 # Oltre queste dimensioni il file diventa <nome>.1 (si tiene una sola copia precedente).
 MAX_BYTE_LOG = 1_000_000
@@ -84,7 +84,8 @@ INTESTAZIONE_STORICO = ["controllato", "andata", "ritorno", "prezzo", "compagnie
 
 
 def giro(p, cartella, client, ritmo, primo=False, posizione_prima=None):
-    """Un giro di ricerche. Ritorna (motivo del blocco o None, messaggio Telegram o None, posizione).
+    """Un giro di ricerche. Ritorna (motivo del blocco o None, messaggio Telegram o None, posizione,
+    motivo per cui Google sembra aver cambiato formato o None).
 
     Il messaggio c'e' solo con un nuovo prezzo minimo o al primo giro dopo l'avvio.
     """
@@ -166,7 +167,11 @@ def giro(p, cartella, client, ritmo, primo=False, posizione_prima=None):
     record_prima = verificate_prima[0]["prezzo"] if verificate_prima else None
     minimo = record_prima
     adesso = datetime.now().isoformat(timespec="seconds")
-    errori = 0
+    errori, errori_formato, con_prezzo = 0, 0, 0
+    formato = None
+    # Se prima c'erano prezzi e ora nessuna ricerca ne trova, il formato e' cambiato in
+    # modo silenzioso (pagine che arrivano ma senza i dati dove il tool li cerca).
+    prezzi_prima = any(v.get("prezzo") for v in prezzi.values())
     with open(cartella / "storico.csv", "a", newline="", encoding="utf-8") as f, Barra(t("barra_verifica"), len(da_fare)) as barra:
         storico = csv.writer(f)
         for k in da_fare:
@@ -181,6 +186,14 @@ def giro(p, cartella, client, ritmo, primo=False, posizione_prima=None):
             except Bloccato as e:
                 bloccato = str(e)
                 break
+            except FormatoCambiato as e:
+                errori_formato += 1
+                barra.scrivi(t("errore_ricerca", chiave=k, errore=e))
+                if errori_formato >= 3:  # non e' un limite di Google: niente rallentamento
+                    formato = str(e)
+                    break
+                barra.avanza()
+                continue
             except Exception as e:  # noqa: BLE001 - un errore non deve fermare il giro
                 errori += 1
                 barra.scrivi(t("errore_ricerca", chiave=k, errore=e))
@@ -189,7 +202,8 @@ def giro(p, cartella, client, ritmo, primo=False, posizione_prima=None):
                     break
                 barra.avanza()
                 continue
-            errori = 0
+            errori = errori_formato = 0
+            con_prezzo += bool(ris)
             # Il venditore resta finche' la fase 3 non lo ricontrolla.
             prezzi[k] = {**(ris or {"prezzo": None}), "controllato": adesso,
                          "venditore": prezzi.get(k, {}).get("venditore") if ris else None}
@@ -207,9 +221,12 @@ def giro(p, cartella, client, ritmo, primo=False, posizione_prima=None):
             prezzi_path.write_text(json.dumps(prezzi, indent=1, ensure_ascii=False), encoding="utf-8")
             time.sleep(ritmo.pausa())
 
+    if not formato and not bloccato and prezzi_prima and len(da_fare) >= 10 and not con_prezzo:
+        formato = t("nessun_risultato")
+
     # 3. Venditori: per gli A/R in top, prezzi di agenzie e compagnia nelle pagine di
     #    prenotazione (per la sola andata fli non restituisce i venditori).
-    if not bloccato:
+    if not bloccato and not formato:
         candidati = [x["chiavi"][0] for x in proposte_verificate(p, prezzi)[: p["top"]] if x["tipo"] == "ar"]
         cercatore, errori = SearchFlights(), 0
         if candidati:
@@ -300,17 +317,17 @@ def giro(p, cartella, client, ritmo, primo=False, posizione_prima=None):
     sotto_obiettivo = bool(top and obiettivo and top[0]["prezzo"] <= obiettivo)
     if primo and top and obiettivo and not sotto_obiettivo:
         # Avvio con un obiettivo non ancora raggiunto: una riga sola, senza la top.
-        return bloccato, t("tg_avviato_breve", tratta=html.escape(tratta), obiettivo=testo_obiettivo(p, top)), pos
+        return bloccato, t("tg_avviato_breve", tratta=html.escape(tratta), obiettivo=testo_obiettivo(p, top)), pos, formato
     if nuovo or (primo and top):
         if sotto_obiettivo:
             titolo = t("tg_obiettivo_raggiunto", prezzo=top[0]["prezzo"], obiettivo=obiettivo)
         else:
             titolo = t("tg_nuovo_minimo") if nuovo else t("tg_avviato")
         return bloccato, messaggio_telegram(p, top, prezzi, cop, confronto + ([""] + consiglio if consiglio else []),
-                                            titolo), pos
+                                            titolo), pos, formato
     # Nessun nuovo minimo: niente messaggio. Un blocco di Google arriva comunque come
     # avviso di rallentamento (main).
-    return bloccato, None, pos
+    return bloccato, None, pos, formato
 
 
 def log_rete(file):
@@ -431,13 +448,21 @@ def main():
     client = nuovo_client()
     ritmo = Ritmo()
     tratta = nome_tratta(p)
-    primo, pos = True, None
+    primo, pos, formato_avvisato = True, None, False
     try:
         while True:
             t0 = time.monotonic()
-            bloccato, messaggio, nuova = giro(p, cartella, client, ritmo, primo=primo, posizione_prima=pos)
+            bloccato, messaggio, nuova, formato = giro(p, cartella, client, ritmo, primo=primo, posizione_prima=pos)
             pos = nuova or pos  # se una volta non si rileva, si confronta con l'ultima nota
             primo = False
+            if formato:
+                print(t("formato_terminale", motivo=formato))
+                if not formato_avvisato:  # su Telegram una volta sola, non a ogni controllo
+                    invia(t("tg_formato", motivo=html.escape(formato), tratta=html.escape(tratta)))
+                    formato_avvisato = True
+            elif formato_avvisato and not bloccato:
+                invia(t("tg_formato_ok", tratta=html.escape(tratta)))
+                formato_avvisato = False
             avviso = None
             if bloccato and ritmo.livello < Ritmo.LIVELLO_MAX:
                 ritmo.livello += 1

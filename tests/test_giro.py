@@ -54,7 +54,7 @@ def google_finto(monkeypatch):
 
 def test_primo_giro_nuovo_minimo(tmp_path, google_finto, capsys):
     p = viaggio(giorni_partenza=3, durata=(14, 15))
-    bloccato, messaggio, _ = tracker.giro(p, tmp_path, None, ricerca.Ritmo())
+    bloccato, messaggio, _, _ = tracker.giro(p, tmp_path, None, ricerca.Ritmo())
     out = capsys.readouterr().out
 
     assert bloccato is None
@@ -75,10 +75,10 @@ def test_nessun_messaggio_senza_nuovo_minimo_ma_si_all_avvio(tmp_path, google_fi
     p = viaggio(giorni_partenza=3, durata=(14, 15))
     tracker.giro(p, tmp_path, None, ricerca.Ritmo())
 
-    _, messaggio, _ = tracker.giro(p, tmp_path, None, ricerca.Ritmo())
+    _, messaggio, _, _ = tracker.giro(p, tmp_path, None, ricerca.Ritmo())
     assert messaggio is None
 
-    _, messaggio, _ = tracker.giro(p, tmp_path, None, ricerca.Ritmo(), primo=True)
+    _, messaggio, _, _ = tracker.giro(p, tmp_path, None, ricerca.Ritmo(), primo=True)
     assert messaggio.startswith("🚀 <b>Tracker avviato</b>")
     assert "🏆 <b>Top" in messaggio
 
@@ -88,7 +88,7 @@ def test_scansione_parziale_e_rotazione(tmp_path, google_finto, monkeypatch):
     p = viaggio(giorni_partenza=5, durata=(14, 16))
     totale = len(ricerca.chiavi(p))
 
-    _, messaggio, _ = tracker.giro(p, tmp_path, None, ricerca.Ritmo())
+    _, messaggio, _, _ = tracker.giro(p, tmp_path, None, ricerca.Ritmo())
     assert "🔎 <b>Scansione in corso</b>" in messaggio
     assert "max 8 per controllo" in messaggio
 
@@ -111,7 +111,7 @@ def test_blocco_di_google(tmp_path, google_finto, monkeypatch):
 
     monkeypatch.setattr(google_flights, "scansione_calendario", bloccato)
     p = viaggio(giorni_partenza=2, durata=(14, 14))
-    motivo, messaggio, _ = tracker.giro(p, tmp_path, None, ricerca.Ritmo())
+    motivo, messaggio, _, _ = tracker.giro(p, tmp_path, None, ricerca.Ritmo())
     assert motivo == "HTTP 429, troppe richieste"
     assert google_finto["ricerche"] == []
     assert messaggio is None  # il blocco arriva come avviso di rallentamento
@@ -127,7 +127,7 @@ def test_date_passate_tolte_dai_dati(tmp_path, google_finto):
 
 def test_posizione_nel_terminale_e_su_telegram(tmp_path, google_finto, capsys):
     p = viaggio(giorni_partenza=2, durata=(14, 14))
-    _, messaggio, pos = tracker.giro(p, tmp_path, None, ricerca.Ritmo())
+    _, messaggio, pos, _ = tracker.giro(p, tmp_path, None, ricerca.Ritmo())
     out = capsys.readouterr().out
     assert "🌍 Ricerche da 🇮🇹 IT, Milano (IP 203.0.113.7)" in out
     assert "🌍 Ricerche da 🇮🇹 IT" in messaggio
@@ -142,7 +142,7 @@ def test_posizione_nel_terminale_e_su_telegram(tmp_path, google_finto, capsys):
 def test_paese_cambiato(tmp_path, google_finto, capsys):
     p = viaggio(giorni_partenza=2, durata=(14, 14))
     prima = {"ip": "198.51.100.1", "paese": "FR", "citta": "Paris"}
-    _, messaggio, _ = tracker.giro(p, tmp_path, None, ricerca.Ritmo(), posizione_prima=prima)
+    _, messaggio, _, _ = tracker.giro(p, tmp_path, None, ricerca.Ritmo(), posizione_prima=prima)
     assert "⚠️ IP cambiato dall'ultimo controllo: prima 🇫🇷 FR (IP 198.51.100.1), ora 🇮🇹 IT" in capsys.readouterr().out
     assert "⚠️ Paese di uscita cambiato: prima 🇫🇷 FR, ora 🇮🇹 IT" in messaggio
 
@@ -150,7 +150,7 @@ def test_paese_cambiato(tmp_path, google_finto, capsys):
 def test_posizione_non_rilevata(tmp_path, google_finto, monkeypatch, capsys):
     monkeypatch.setattr(google_flights, "posizione", lambda: None)
     p = viaggio(giorni_partenza=2, durata=(14, 14))
-    _, messaggio, pos = tracker.giro(p, tmp_path, None, ricerca.Ritmo())
+    _, messaggio, pos, _ = tracker.giro(p, tmp_path, None, ricerca.Ritmo())
     assert pos is None
     assert "Paese di uscita non rilevato" in capsys.readouterr().out
     assert "🌍" not in messaggio
@@ -159,7 +159,7 @@ def test_posizione_non_rilevata(tmp_path, google_finto, monkeypatch, capsys):
 def test_obiettivo_non_raggiunto_nessun_avviso(tmp_path, google_finto, capsys):
     p = viaggio(giorni_partenza=2, durata=(14, 14))
     p["avvisa_sotto"] = 700  # i prezzi finti nel periodo partono da 800
-    _, messaggio, _ = tracker.giro(p, tmp_path, None, tracker.Ritmo())
+    _, messaggio, _, _ = tracker.giro(p, tmp_path, None, tracker.Ritmo())
     assert messaggio is None
     assert "🎯 Obiettivo 700 EUR · ora 800 EUR (mancano 100 EUR)" in capsys.readouterr().out
 
@@ -167,7 +167,7 @@ def test_obiettivo_non_raggiunto_nessun_avviso(tmp_path, google_finto, capsys):
 def test_obiettivo_raggiunto(tmp_path, google_finto):
     p = viaggio(giorni_partenza=2, durata=(14, 14))
     p["avvisa_sotto"] = 850
-    _, messaggio, _ = tracker.giro(p, tmp_path, None, tracker.Ritmo())
+    _, messaggio, _, _ = tracker.giro(p, tmp_path, None, tracker.Ritmo())
     assert messaggio.startswith("🎯 <b>Sotto il tuo obiettivo</b>: 800 EUR (obiettivo 850 EUR)")
     assert "🎯 Obiettivo 850 EUR · ora 800 EUR: raggiunto" in messaggio
 
@@ -176,7 +176,7 @@ def test_obiettivo_all_avvio_messaggio_comunque(tmp_path, google_finto):
     p = viaggio(giorni_partenza=2, durata=(14, 14))
     p["avvisa_sotto"] = 700
     tracker.giro(p, tmp_path, None, tracker.Ritmo())
-    _, messaggio, _ = tracker.giro(p, tmp_path, None, tracker.Ritmo(), primo=True)
+    _, messaggio, _, _ = tracker.giro(p, tmp_path, None, tracker.Ritmo(), primo=True)
     # obiettivo non raggiunto: avvio in una riga, senza la top
     assert messaggio == ("🚀 <b>Tracker avviato</b> · Roma -&gt; Osaka\n"
                          "🎯 Obiettivo 700 EUR · ora 800 EUR (mancano 100 EUR)")
@@ -186,6 +186,32 @@ def test_obiettivo_gia_raggiunto_all_avvio(tmp_path, google_finto):
     p = viaggio(giorni_partenza=2, durata=(14, 14))
     p["avvisa_sotto"] = 850
     tracker.giro(p, tmp_path, None, tracker.Ritmo())
-    _, messaggio, _ = tracker.giro(p, tmp_path, None, tracker.Ritmo(), primo=True)
+    _, messaggio, _, _ = tracker.giro(p, tmp_path, None, tracker.Ritmo(), primo=True)
     assert messaggio.startswith("🎯 <b>Sotto il tuo obiettivo</b>: 800 EUR")
     assert "🏆 <b>Top" in messaggio
+
+
+def test_formato_cambiato_non_rallenta(tmp_path, google_finto, monkeypatch):
+    def rotta(*a, **k):
+        raise tracker.FormatoCambiato("risposta Google inattesa (pagina senza risultati)")
+    monkeypatch.setattr(google_flights, "cerca", rotta)
+    monkeypatch.setattr(google_flights, "cerca_sola_andata", rotta)
+    p = viaggio(giorni_partenza=3, durata=(14, 15))
+    bloccato, _, _, formato = tracker.giro(p, tmp_path, None, tracker.Ritmo())
+    assert bloccato is None  # non e' un limite di Google: il ritmo non cambia
+    assert formato.startswith("risposta Google inattesa")
+    assert len(google_finto["ricerche"]) == 0
+
+
+def test_formato_cambiato_in_silenzio(tmp_path, google_finto, monkeypatch):
+    p = viaggio(giorni_partenza=3, durata=(14, 15))
+    tracker.giro(p, tmp_path, None, tracker.Ritmo())  # primo giro: prezzi trovati
+    monkeypatch.setattr(google_flights, "cerca", lambda *a, **k: None)
+    monkeypatch.setattr(google_flights, "cerca_sola_andata", lambda *a, **k: None)
+    _, _, _, formato = tracker.giro(p, tmp_path, None, tracker.Ritmo())
+    assert formato == "nessuna ricerca ha restituito prezzi"
+
+
+def test_giro_normale_nessun_problema_di_formato(tmp_path, google_finto):
+    p = viaggio(giorni_partenza=3, durata=(14, 15))
+    assert tracker.giro(p, tmp_path, None, tracker.Ritmo())[3] is None

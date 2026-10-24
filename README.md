@@ -543,6 +543,17 @@ verified at each check, 15), `ITINERARI_VENDITORI` (booking pages per combinatio
 
 ## Troubleshooting
 
+**pip cannot find `fast-flights==3.1.0` ("from versions: … 2.2").** The Python you used to
+create `.venv` is too old: fast-flights 3.x needs Python 3.10 and the tool 3.11. Check with
+`python3 --version` (on Windows `py -0` lists the installed versions), install Python 3.11
+or later, delete the `.venv` folder and create it again, e.g. `python3.13 -m venv .venv` (on
+Windows `py -3.13 -m venv .venv`).
+
+**"🛠 Google seems to have changed its format".** The tool can no longer read Google's
+responses: this happens when Google changes its pages. Update with `git pull`; if the
+warning stays, report the problem on GitHub. In this case the tool does not slow down and
+retries at every check; when reading works again a "✅" arrives.
+
 **"No flights on sale".** Check the chosen city and country (e.g. `Naples, Italy`, not
 `Naples, United States`) and the airports: a small airport may not have the route. Try
 a larger nearby airport, or another period.

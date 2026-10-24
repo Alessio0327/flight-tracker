@@ -9,6 +9,20 @@ PATCH for fixes.
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-10-24
+
+### Added
+- Alert when Google seems to have changed its format (unreadable responses, or no
+  prices at all where there used to be some): one Telegram message, no slowdown, and a
+  "✅" message once reading works again.
+- README: what to do when pip finds `fast-flights` only up to 2.2 (Python too old).
+
+### Fixed
+- A failed search no longer stops the tracker with an error (the error text clashed with
+  an internal parameter name since 1.2.0).
+- `telegram.json` is no longer locked during requests to Telegram, so a slow network
+  does not delay notifications from other instances.
+
 ## [1.5.0] - 2026-10-24
 
 ### Added
@@ -96,7 +110,8 @@ PATCH for fixes.
   airports, period and trip length, price rating, agency prices, adaptive rate limiter,
   progress bar, macOS and Telegram notifications.
 
-[Unreleased]: https://github.com/Alessio0327/flight-tracker/compare/v1.5.0...HEAD
+[Unreleased]: https://github.com/Alessio0327/flight-tracker/compare/v1.6.0...HEAD
+[1.6.0]: https://github.com/Alessio0327/flight-tracker/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/Alessio0327/flight-tracker/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/Alessio0327/flight-tracker/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/Alessio0327/flight-tracker/compare/v1.2.0...v1.3.0

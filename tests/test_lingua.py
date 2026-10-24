@@ -126,3 +126,8 @@ def test_lingua_scelta_aggiunta_se_manca(tmp_path, inglese):
 def test_avvio_diretto_senza_campo_lingua_e_italiano(tmp_path, inglese):
     p = parametri.parametri_da_file(file_osaka(tmp_path))
     assert p["lingua"] == "it" and lingua.LINGUA == "it"
+
+
+def test_testo_con_segnaposto_chiave():
+    """Regressione: t("errore_ricerca", chiave=...) andava in errore (chiave = nome del parametro)."""
+    assert lingua.t("errore_ricerca", chiave="2027-03-01|2027-03-16", errore="x") == "[errore] 2027-03-01|2027-03-16: x"

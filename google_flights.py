@@ -85,6 +85,10 @@ class Bloccato(Exception):
     """Google sta limitando le richieste (429, captcha o troppi errori)."""
 
 
+class FormatoCambiato(RuntimeError):
+    """La risposta di Google non ha piu' la struttura attesa: va aggiornato il tool."""
+
+
 def controlla_blocco(r):
     if r.status_code == 429:
         raise Bloccato(t("http_429"))
@@ -110,12 +114,17 @@ def _cerca(client, viaggio, tratte, max_scali):
     r = client.get(URL, params=params)
     controlla_blocco(r)
     script = LexborHTMLParser(r.text).css_first(r"script.ds\:1")
-    if script is None:
-        raise RuntimeError(t("risposta_inattesa"))
+    if script is None or "data:" not in script.text():
+        raise FormatoCambiato(t("risposta_inattesa"))
     payload_str = script.text().split("data:", 1)[1].rsplit(",", 1)[0]
     if payload_str.endswith("errorHasStatus: true"):
         return None
-    payload = json.loads(payload_str)
+    try:
+        payload = json.loads(payload_str)
+    except ValueError:
+        raise FormatoCambiato(t("risposta_inattesa")) from None
+    if not isinstance(payload, list):
+        raise FormatoCambiato(t("risposta_inattesa"))
 
     migliore = None
     # [2] = "voli migliori", [3] = altri voli; voci senza prezzo vengono saltate.

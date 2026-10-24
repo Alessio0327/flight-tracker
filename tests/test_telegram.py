@@ -132,3 +132,20 @@ def test_ricerca_privata_non_invia(bot):
     assert bot.inviati == []
     tracker.invio_telegram({})("messaggio normale")  # senza il campo: Telegram attivo
     assert [testo for _, testo in bot.inviati] == ["messaggio normale"]
+
+
+def test_messaggi_gia_gestiti_da_altra_istanza(bot):
+    """Il file non resta bloccato durante getUpdates: se nel frattempo un'altra istanza ha
+    gestito gli stessi messaggi, non si risponde due volte."""
+    bot.coda = [messaggio(10, 2, "/start")]
+    vero = bot.chiama
+
+    def chiama(token, metodo, **params):
+        risultato = vero(token, metodo, **params)
+        if metodo == "getUpdates":
+            cfg = json.loads(telegram_bot.CONFIG.read_text())
+            telegram_bot.CONFIG.write_text(json.dumps({**cfg, "offset": 11}))
+        return risultato
+    telegram_bot._chiama = chiama
+    telegram_bot.controlla_iscrizioni()
+    assert bot.inviati == []

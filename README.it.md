@@ -548,6 +548,17 @@ ogni controllo, 15), `ITINERARI_VENDITORI` (pagine di prenotazione per combinazi
 
 ## Problemi comuni
 
+**pip non trova `fast-flights==3.1.0` ("from versions: … 2.2").** Il Python con cui hai
+creato `.venv` è troppo vecchio: le versioni 3.x di fast-flights richiedono Python 3.10 e il
+tool 3.11. Controlla con `python3 --version` (su Windows `py -0` elenca le versioni
+installate), installa Python 3.11 o più recente, cancella la cartella `.venv` e ricreala,
+per esempio `python3.13 -m venv .venv` (su Windows `py -3.13 -m venv .venv`).
+
+**"🛠 Google sembra aver cambiato formato".** Il tool non riesce più a leggere le risposte
+di Google: succede quando Google cambia le sue pagine. Aggiorna con `git pull`; se
+l'avviso resta, segnala il problema su GitHub. In questo caso il tool non rallenta e
+riprova a ogni controllo; quando la lettura torna regolare arriva un "✅".
+
 **"Nessun volo in vendita".** Controlla città e paese scelti (es. `Napoli, Italia` e non
 `Napoli, Stati Uniti`) e gli aeroporti: un aeroporto piccolo può non avere la rotta.
 Prova un aeroporto vicino più grande, oppure un altro periodo.

@@ -107,12 +107,21 @@ def invia(testo_html):
 
 def controlla_iscrizioni():
     """Legge i nuovi messaggi al bot: /start iscrive la chat, /stop la toglie.
-    Ritorna le chat che hanno inviato /start in questa chiamata (anche se gia' iscritte)."""
-    avviate = []
+    Ritorna le chat che hanno inviato /start in questa chiamata (anche se gia' iscritte).
+
+    telegram.json resta bloccato solo per leggere e salvare, non durante le richieste a
+    Telegram: una rete lenta non fa aspettare le notifiche delle altre istanze.
+    """
     with _config_bloccata() as cfg:
-        token = cfg["token"]
-        aggiornamenti = _chiama(token, "getUpdates", offset=cfg.get("offset", 0), timeout=0)
+        token, offset = cfg["token"], cfg.get("offset", 0)
+    aggiornamenti = _chiama(token, "getUpdates", offset=offset, timeout=0)
+    if not aggiornamenti:
+        return []
+    avviate, risposte = [], []
+    with _config_bloccata() as cfg:
         for u in aggiornamenti:
+            if u["update_id"] < cfg.get("offset", 0):
+                continue  # gia' gestito da un'altra istanza nel frattempo
             cfg["offset"] = u["update_id"] + 1
             msg = u.get("message")
             if not msg:
@@ -122,16 +131,17 @@ def controlla_iscrizioni():
                 if chat not in cfg["chat_ids"]:
                     cfg["chat_ids"].append(chat)
                 avviate.append(chat)
-                risposta = t("bot_benvenuto")
+                risposte.append((chat, t("bot_benvenuto")))
             elif testo.startswith("/stop"):
                 cfg["chat_ids"] = [c for c in cfg["chat_ids"] if c != chat]
-                risposta = t("bot_congedo")
+                risposte.append((chat, t("bot_congedo")))
             else:
-                risposta = t("bot_aiuto")
-            try:
-                _chiama(token, "sendMessage", chat_id=chat, text=risposta)
-            except (OSError, RuntimeError):
-                pass
+                risposte.append((chat, t("bot_aiuto")))
+    for chat, testo in risposte:
+        try:
+            _chiama(token, "sendMessage", chat_id=chat, text=testo)
+        except (OSError, RuntimeError):
+            pass
     return avviate
 
 

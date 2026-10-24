@@ -23,7 +23,8 @@ def imposta_valuta(valuta):
     VALUTA = valuta
 
 
-def t(chiave, **valori):
+def t(chiave, /, **valori):
+    # "/": chiave e' solo posizionale, cosi' un testo puo' avere anche un segnaposto {chiave}.
     # {valuta} e' sempre disponibile; un valore passato esplicitamente ha la precedenza.
     return TESTI[chiave][LINGUE.index(LINGUA)].format(**{"valuta": VALUTA, **valori})
 
@@ -334,6 +335,17 @@ TESTI = {
                          "⚠️ Google is still limiting requests ({motivo}), staying at the slowest pace."),
     "tg_accelero": ("✅ <b>Accelero</b>: Google risponde di nuovo normalmente.",
                     "✅ <b>Speeding up</b>: Google answers normally again."),
+    "tg_formato": ("🛠 <b>Google sembra aver cambiato formato</b>: il tool non riesce più a leggere i risultati "
+                   "({motivo}).\n{tratta}\nServe un aggiornamento: prova con git pull, oppure segnala il problema su GitHub.",
+                   "🛠 <b>Google seems to have changed its format</b>: the tool can no longer read the results "
+                   "({motivo}).\n{tratta}\nAn update is needed: try git pull, or report the problem on GitHub."),
+    "tg_formato_ok": ("✅ Lettura dei risultati di Google di nuovo regolare.\n{tratta}",
+                      "✅ Reading Google results works again.\n{tratta}"),
+    "formato_terminale": ("\n[formato] Google sembra aver cambiato formato ({motivo}): serve un aggiornamento "
+                          "(git pull). Il tool riprova al prossimo controllo, senza rallentare.",
+                          "\n[format] Google seems to have changed its format ({motivo}): an update is needed "
+                          "(git pull). The tool retries at the next check, without slowing down."),
+    "nessun_risultato": ("nessuna ricerca ha restituito prezzi", "no search returned any price"),
     "tg_prossimo": ("⏱ Prossimo controllo alle {ora}", "⏱ Next check at {ora}"),
     "ritmo_ora": ("Ora {stato}.", "Now {stato}."),
     "ritmo_terminale": ("\n[ritmo] {avviso} Ora {stato}.", "\n[pace] {avviso} Now {stato}."),
