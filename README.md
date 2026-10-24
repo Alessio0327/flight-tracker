@@ -41,6 +41,8 @@ typical 690 EUR for that route.
 
 - **Tries every date:** departure period (a month, a date ± N days, or a range) for every
   trip length between a minimum and a maximum.
+- **Weekend mode:** trips of 1 to 4 days that include Saturday or Sunday, for every
+  weekend in the period.
 - **Cities, not codes:** type "Rome" and pick Fiumicino, Ciampino or both. Up to 2 cities
   per side (e.g. New York or Boston).
 - **Return from a different city:** e.g. Rome → New York, then Boston → Rome.
@@ -124,6 +126,7 @@ How many days before/after that date: 7
   Checking flights on sale...
   Outbound: flights on 15 of 15 dates, one-way from 289 EUR.
   Return: flights on 45 of 45 dates, one-way from 305 EUR.
+Trip length: [1] free (minimum and maximum days)  [2] weekend (1-4 days including Saturday or Sunday) (Enter = 1):
 Minimum trip length (days): 10
 Maximum trip length (days): 14
 Maximum stops per leg (0 = direct only, Enter = any): 1
@@ -146,11 +149,20 @@ Accepted answers:
 | Month | `10/2027`, `10/27`, `2027-10` |
 | Date | `15/10/2027`, `15/10/27`, `2027-10-15` (day/month/year) |
 | Days before/after | `7` = 7 days before and 7 after the date |
+| Trip length | Enter or `1` = minimum and maximum days; `2` = weekend, then days from 1 to 4 |
 | Stops | `0` = direct only, `1`, `2`, Enter = any |
 | Currency | 3-letter code: `EUR`, `USD`, `GBP`, `JPY`, ... Enter = EUR |
 
+**Choosing cities.** When several cities share a name, the tool lists them with the full
+country name (`Naples, Italy` / `Naples, United States`) and puts first those in the
+country you are searching from (taken from your IP, or from the language). Check the
+line before pressing Enter anyway. On one side you cannot pick the same city twice, nor
+two cities with the same name: searches tell them apart by name.
+
 Before asking for the trip length, the tool checks that flights are on sale in the
-period. If there are none, it immediately asks for another period or city.
+period. If there are none, it immediately asks for another period or city, and reminds
+you to check the chosen cities and airports: a small airport, or a city with the same
+name in another country, may have no flights.
 
 ## What you see during a check
 
@@ -237,7 +249,27 @@ changes or is cancelled, the other is not protected).
 | To know whether New York or Boston is cheaper | type 1, Rome → New York and Boston |
 | To fly into New York and out of Boston | type 2, Rome → New York, return Boston → Rome |
 | Every combination of the two cities | type 2, New York and Boston on both sides |
+| A weekend away in March, 2-3 days | trip length `2` (weekend), month `03/2027`, days 2-3 |
 | To watch a good price seen on a few days | date ± 3, narrow trip length (e.g. 10-12) |
+
+### Weekend
+
+At the `Trip length` question answer `2`: the tool asks how many days the trip should
+last, **counting departure and return day** (Fri → Sun = 3 days, a day trip on Saturday
+= 1), from 1 to 4. Then it keeps only trips that include **at least one of Saturday and
+Sunday**, for every weekend in the period: Fri → Sat, Sat → Mon, Sun → Tue yes; Mon → Thu
+or a Friday day trip no.
+
+```
+Trip length: [1] free (minimum and maximum days)  [2] weekend (1-4 days including Saturday or Sunday) (Enter = 1): 2
+Minimum trip days, departure and return included (1-4): 2
+Maximum trip days, departure and return included (2-4): 3
+...
+1. 95 GBP  Round trip London  2027-03-13 -> 2027-03-16 (4 days, Sat → Tue)  easyJet  [FCO-LGW]
+```
+
+For a month of weekends, use the whole month as the period (`03/2027`). In the JSON file:
+`"weekend": true`, with `durata` in calendar days (optional, default 1-4).
 
 ### The period is counted from the date
 
@@ -298,7 +330,8 @@ Two ways to use it:
 | `andata.da`, `andata.a` (outbound from / to) | yes | 1 or 2 cities, each `{"nome": "...", "aeroporti": ["..."]}` |
 | `ritorno.da`, `ritorno.a` (return from / to) | no | same format. Without `ritorno`: same city (type 1) |
 | `periodo` (period) | yes | `{"data": "10/05/2027", "giorni_prima_dopo": 7}`, `{"mese": "05/2027"}` or `{"dal": "01/05/2027", "al": "20/05/2027"}` |
-| `durata` (trip length) | yes | `{"min": 10, "max": 14}` |
+| `durata` (trip length) | yes | `{"min": 10, "max": 14}`. With `weekend`: calendar days from 1 to 4, optional (default 1-4) |
+| `weekend` | no | `true` = weekend mode: only trips that include Saturday or Sunday |
 | `max_scali` (max stops) | no | `null` or missing = any, `0` = direct only, `1`, `2` |
 | `top` | no | number of results, default 5 |
 | `frequenza_minuti` | no | minutes between checks, default 30 |
@@ -477,6 +510,10 @@ verified at each check, 15), `ITINERARI_VENDITORI` (booking pages per combinatio
 
 ## Troubleshooting
 
+**"No flights on sale".** Check the chosen city and country (e.g. `Naples, Italy`, not
+`Naples, United States`) and the airports: a small airport may not have the route. Try
+a larger nearby airport, or another period.
+
 **Nothing arrives on Telegram.** Usually it means the price has not dropped: the bot
 writes only with a new lowest price. To be sure, check that the terminal is open, that
 the computer is not asleep and the time of `top.txt`.
@@ -490,6 +527,10 @@ The cheapest ones are already verified.
 **A price seen on Google Flights does not show up.** Check that the departure is in the
 period and the stops within the maximum. Agency offers also change from user to user,
 and from country to country.
+
+**First start without internet.** The list of cities and airports is downloaded on the
+first start (then a local copy is kept for 30 days): without a connection the tool stops
+with a message.
 
 **`errori_rete.log`.** Internal messages of the network library, e.g. `excessive load
 generating behavior`: Google closes a connection and the tool opens another one. It is
@@ -523,6 +564,13 @@ badge at the top and in the **Actions** tab.
 | `tests/`, `.github/workflows/test.yml` | tests and their run on GitHub |
 | `telegram.json` | bot token and subscribed chats (excluded from git) |
 | `data/<search>/` | `top.txt`, `storico.csv` (every price found, with the country), `prezzi.json`, `parametri.json`, `errori_rete.log` |
+
+`storico.csv` has the columns `controllato, andata, ritorno, prezzo, compagnie, voli, paese`
+(checked, outbound, return, price, airlines, flights, country). For one-way rows `ritorno`
+is `out|<city>` or `ret|<city>`; for agency prices `compagnie` is the seller and `voli` the
+times. Above 5 MB the history becomes `storico.1.csv`, above 1 MB the log becomes
+`errori_rete.log.1`: only one previous copy is kept. At startup the tool lists searches in
+`data/` whose period is over, without deleting them.
 
 ## Limitations
 

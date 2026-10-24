@@ -8,13 +8,14 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 
 from google_flights import nuovo_client, voli_in_vendita
-from interfaccia import testo_scali
+from interfaccia import testo_durata, testo_scali
 from lingua import t
 from luoghi import Luoghi
 from ricerca import (
-    LIMITE_CALENDARIO_GIORNI, LIMITE_RICERCA_GIORNI, aeroporti, chiavi, etichetta, limite, nomi,
-    ultima_data,
+    GIORNI_WEEKEND_MAX, LIMITE_CALENDARIO_GIORNI, LIMITE_RICERCA_GIORNI, aeroporti, chiavi, etichetta, limite,
+    nomi, ultima_data,
 )
+import google_flights
 import lingua
 import ricerca
 
@@ -34,7 +35,7 @@ def scegli_luogo(luoghi, testo):
     """Un nome di citta' (o codice IATA) -> {"nome", "aeroporti"}, o None."""
     codice = testo.upper()
     if codice in luoghi.per_aeroporto and codice not in luoghi.aeroporti:
-        citta, nome = luoghi.per_aeroporto[codice]
+        _, nome = luoghi.per_aeroporto[codice]
         return {"nome": nome, "aeroporti": [codice]}
 
     trovate = luoghi.cerca(testo)[:8]
@@ -45,7 +46,7 @@ def scegli_luogo(luoghi, testo):
     if len(trovate) > 1:
         for i, c in enumerate(trovate, 1):
             elenco = ", ".join(f"{a} {n}" for a, n in luoghi.aeroporti[c["code"]])
-            print(f"  [{i}] {luoghi.nome_citta(c)}, {c['country_code']}  ({elenco})")
+            print(f"  [{i}] {luoghi.nome_citta(c)}, {luoghi.nome_paese(c['country_code'])}  ({elenco})")
         n = chiedi(t("quale_citta", testo=testo), indici(len(trovate), default=[1]))
         citta = trovate[n[0] - 1]
 
@@ -71,8 +72,13 @@ def chiedi_citta(luoghi, ruolo, default=None):
     for i in range(1, int(n or "1") + 1):
         domanda = t("citta_domanda", ruolo=ruolo, Ruolo=ruolo[0].upper() + ruolo[1:],
                     numero=f" {i}" if n == "2" else "")
-        while not (c := scegli_luogo(luoghi, input(domanda).strip())):
-            pass
+        while True:
+            c = scegli_luogo(luoghi, input(domanda).strip())
+            # Le ricerche usano il nome della citta': due nomi uguali si confonderebbero.
+            if c and any(x["nome"] == c["nome"] for x in elenco):
+                print(t("citta_doppia", nome=c["nome"]))
+            elif c:
+                break
         elenco.append(c)
     return elenco
 
@@ -119,6 +125,15 @@ def intero(minimo):
         n = int(s) if s.isdigit() else None
         if n is None or n < minimo:
             raise ValueError(t("serve_intero", minimo=minimo))
+        return n
+    return conv
+
+
+def tra(minimo, massimo):
+    def conv(s):
+        n = int(s) if s.isdigit() else None
+        if n is None or not minimo <= n <= massimo:
+            raise ValueError(t("serve_tra", minimo=minimo, massimo=massimo))
         return n
     return conv
 
@@ -184,6 +199,7 @@ def controlla_periodo(client, p, inizio, fine):
         if not trovate:
             print(t("nessun_volo", lato=nome, da=nomi(lato["da"]), a=nomi(lato["a"]),
                     inizio=f"{da:%d/%m/%Y}", fine=f"{a:%d/%m/%Y}"))
+            print(t("controlla_citta", da=etichetta(lato["da"]), a=etichetta(lato["a"])))
             scelta_ = chiedi(t("cambia_scelta"), scelta("1", "2"))
             return "periodo" if scelta_ == "1" else "citta"
         print(t("voli_trovati", lato=nome, date=len(trovate), totale=(a - da).days + 1, prezzo=min(trovate.values())))
@@ -201,6 +217,8 @@ def _leggi_citta(valore, dove):
                 or not isinstance(c.get("aeroporti"), list) or not c["aeroporti"]):
             raise ValueError(t("formato_citta", dove=dove))
         out.append({"nome": c["nome"], "aeroporti": [str(a).upper() for a in c["aeroporti"]]})
+    if len({c["nome"] for c in out}) < len(out):
+        raise ValueError(t("citta_doppie", dove=dove))
     return out
 
 
@@ -242,10 +260,13 @@ def parametri_da_file(percorso, lingua_scelta=None):
         else:
             inizio, fine = data(str(per["dal"])), data(str(per["al"]))
         inizio = max(inizio, ricerca.oggi() + timedelta(days=1))
+        # Nel weekend la durata e' facoltativa (default 1-4 giorni di calendario).
+        durata = f.get("durata") or ({"min": 1, "max": GIORNI_WEEKEND_MAX} if f.get("weekend") else f["durata"])
         p = {
             "tipo": tipo, "andata": andata, "ritorno": ritorno,
             "inizio": inizio.isoformat(), "fine": fine.isoformat(),
-            "giorni_min": int(f["durata"]["min"]), "giorni_max": int(f["durata"]["max"]),
+            "weekend": bool(f.get("weekend")),
+            "giorni_min": int(durata["min"]), "giorni_max": int(durata["max"]),
             "max_scali": None if f.get("max_scali") is None else int(f["max_scali"]),
             "top": int(f.get("top", 5)), "frequenza_minuti": int(f.get("frequenza_minuti", 30)),
             "valuta": valuta(str(f.get("valuta") or "")),
@@ -261,7 +282,13 @@ def parametri_da_file(percorso, lingua_scelta=None):
         raise
     if fine < inizio:
         raise ValueError(t("periodo_vuoto"))
-    if not 1 <= p["giorni_min"] <= p["giorni_max"]:
+    if p["weekend"]:
+        # Nel file la durata del weekend e' in giorni di calendario, come nelle domande.
+        if not 1 <= p["giorni_min"] <= p["giorni_max"] <= GIORNI_WEEKEND_MAX:
+            raise ValueError(t("durata_weekend_non_valida"))
+        p["giorni_min"] -= 1
+        p["giorni_max"] -= 1
+    elif not 1 <= p["giorni_min"] <= p["giorni_max"]:
         raise ValueError(t("durata_non_valida"))
     if p["top"] < 1 or p["frequenza_minuti"] < 1 or (p["max_scali"] or 0) < 0:
         raise ValueError(t("valori_non_validi"))
@@ -289,14 +316,19 @@ def stampa_riassunto(p):
             andata_da=etichetta(p["andata"]["da"]), andata_a=etichetta(p["andata"]["a"]),
             ritorno_da=etichetta(p["ritorno"]["da"]), ritorno_a=etichetta(p["ritorno"]["a"]),
             inizio=f"{date.fromisoformat(p['inizio']):%d/%m/%Y}", fine=f"{date.fromisoformat(p['fine']):%d/%m/%Y}",
-            min=p["giorni_min"], max=p["giorni_max"], scali=testo_scali(p["max_scali"]),
+            durata=testo_durata(p), scali=testo_scali(p["max_scali"]),
             top=p["top"], frequenza=p["frequenza_minuti"], valuta=p.get("valuta", "EUR")))
 
 
 def chiedi_parametri():
     if chiedi(t("modo_domanda"), scelta("", "1", "2")) == "2":
         return chiedi_file()
-    luoghi = Luoghi(lingua.LINGUA)
+    # Paese dell'utente (dall'IP, o dalla lingua) per proporre prima le sue citta'.
+    paese = (google_flights.posizione() or {}).get("paese") or {"it": "IT"}.get(lingua.LINGUA)
+    try:
+        luoghi = Luoghi(lingua.LINGUA, paese)
+    except OSError as e:  # primo avvio senza internet: niente copia locale delle citta'
+        raise SystemExit(t("luoghi_offline", errore=e)) from None
     client = nuovo_client()
     p = {}
     print(t("date_cercabili", limite=f"{limite(LIMITE_RICERCA_GIORNI):%d/%m/%Y}", giorni=LIMITE_RICERCA_GIORNI))
@@ -324,8 +356,15 @@ def chiedi_parametri():
     inizio, fine = periodo
     p["inizio"], p["fine"] = inizio.isoformat(), fine.isoformat()
     while True:
-        p["giorni_min"] = chiedi(t("durata_min_domanda"), intero(1))
-        p["giorni_max"] = chiedi(t("durata_max_domanda"), intero(p["giorni_min"]))
+        p["weekend"] = chiedi(t("modo_durata_domanda"), scelta("", "1", "2")) == "2"
+        if p["weekend"]:
+            # Si chiedono giorni di calendario (ven -> dom = 3), si salvano differenze tra date.
+            minimo = chiedi(t("weekend_min_domanda"), tra(1, GIORNI_WEEKEND_MAX))
+            massimo = chiedi(t("weekend_max_domanda", minimo=minimo), tra(minimo, GIORNI_WEEKEND_MAX))
+            p["giorni_min"], p["giorni_max"] = minimo - 1, massimo - 1
+        else:
+            p["giorni_min"] = chiedi(t("durata_min_domanda"), intero(1))
+            p["giorni_max"] = chiedi(t("durata_max_domanda"), intero(p["giorni_min"]))
         tot, ora = len(chiavi(p, anche_future=True)), len(chiavi(p))
         if ora == tot:
             break

@@ -41,6 +41,8 @@ lista di Google e i 690 EUR tipici per quella tratta.
 
 - **Prova tutte le date:** periodo di partenza (un mese, una data ± N giorni, o un
   intervallo) per ogni durata tra un minimo e un massimo.
+- **Modalità weekend:** viaggi da 1 a 4 giorni che toccano sabato o domenica, per tutti
+  i weekend del periodo.
 - **Città, non codici:** scrivi "Roma" e scegli Fiumicino, Ciampino o entrambi. Fino a 2
   città per lato (es. New York o Boston).
 - **Ritorno da un'altra città:** es. andata Roma → New York, ritorno Boston → Roma.
@@ -105,8 +107,8 @@ Tipo di viaggio: [1] andata e ritorno sulla stessa citta'  [2] ritorno da un'alt
 ANDATA
 Quante citta' di partenza? [1/2] (Invio = 1):
   Citta' di partenza: roma
-  [1] Roma, IT  (FCO Fiumicino, CIA Ciampino)
-  [2] Roma, AU  (RMA Roma)
+  [1] Roma, Italia  (FCO Fiumicino, CIA Ciampino)
+  [2] Roma, Australia  (RMA Roma)
   Quale 'roma'? (Invio = 1):
   [1] FCO Fiumicino
   [2] CIA Ciampino
@@ -128,6 +130,7 @@ Quanti giorni prima/dopo quella data: 7
   Controllo i voli in vendita...
   Andata: voli in 15 date su 15, solo andata da 289 EUR.
   Ritorno: voli in 45 date su 45, solo andata da 305 EUR.
+Durata: [1] libera (giorni minimi e massimi)  [2] weekend (1-4 giorni con sabato o domenica) (Invio = 1):
 Durata minima viaggio (giorni): 10
 Durata massima viaggio (giorni): 14
 Massimo scali per tratta (0 = solo diretti, Invio = qualsiasi): 1
@@ -150,11 +153,21 @@ Risposte accettate:
 | Mese | `10/2027`, `10/27`, `2027-10` |
 | Data | `15/10/2027`, `15/10/27`, `2027-10-15` |
 | Giorni prima/dopo | `7` = 7 giorni prima e 7 dopo la data |
+| Durata | Invio o `1` = giorni minimi e massimi; `2` = weekend, poi giorni da 1 a 4 |
 | Scali | `0` = solo diretti, `1`, `2`, Invio = qualsiasi |
 | Valuta | codice di 3 lettere: `EUR`, `USD`, `GBP`, `JPY`, ... Invio = EUR |
 
+**Scelta delle città.** Quando più città hanno lo stesso nome, il tool le elenca con il
+paese per intero (`Napoli, Italia` / `Napoli, Stati Uniti`) e mette prima quelle del
+paese da cui stai cercando (lo ricava dall'IP, o dalla lingua). Controlla comunque la
+riga prima di premere Invio: Naples in Florida, in italiano, si chiama anche lei "Napoli".
+Sullo stesso lato non puoi scegliere due volte la stessa città, né due città con lo
+stesso nome: le ricerche le distinguono per nome.
+
 Prima di chiedere la durata, il tool controlla che nel periodo ci siano voli in
-vendita. Se non ce ne sono, chiede subito un altro periodo o un'altra città.
+vendita. Se non ce ne sono, chiede subito un altro periodo o un'altra città, e ti
+ricorda di controllare città e aeroporti scelti: un aeroporto piccolo (es. Salerno) o una
+città omonima in un altro paese possono non avere voli.
 
 ## Cosa vedi durante un controllo
 
@@ -241,7 +254,26 @@ miste il tool combina due biglietti di sola andata e ti ricorda che non sono col
 | Capire se conviene New York o Boston | tipo 1, Roma → New York e Boston |
 | Entrare da New York e uscire da Boston | tipo 2, Roma → New York, ritorno Boston → Roma |
 | Tutte le combinazioni tra le due città | tipo 2, New York e Boston su entrambi i lati |
+| Un weekend fuori a marzo, 2-3 giorni | durata `2` (weekend), mese `03/2027`, giorni 2-3 |
 | Tenere d'occhio un buon prezzo visto su pochi giorni | data ± 3, durata stretta (es. 10-12) |
+
+### Weekend
+
+Alla domanda `Durata` rispondi `2`: il tool chiede quanti giorni deve durare il viaggio,
+**contando partenza e ritorno** (ven → dom = 3 giorni, sab in giornata = 1), da 1 a 4.
+Poi tiene solo i viaggi che toccano **almeno un giorno tra sabato e domenica**, per ogni
+weekend del periodo: ven → sab, sab → lun, dom → mar sì; lun → gio o ven in giornata no.
+
+```
+Durata: [1] libera (giorni minimi e massimi)  [2] weekend (1-4 giorni con sabato o domenica) (Invio = 1): 2
+Giorni minimi del viaggio, partenza e ritorno compresi (1-4): 2
+Giorni massimi del viaggio, partenza e ritorno compresi (2-4): 3
+...
+1. 72 EUR  A/R Barcellona  2027-03-06 -> 2027-03-08 (3 gg, sab → lun)  Wizz Air  [FCO-BCN]
+```
+
+Per un mese di weekend, usa come periodo il mese intero (`03/2027`). Nel file JSON:
+`"weekend": true`, con `durata` in giorni di calendario (facoltativa, default 1-4).
 
 ### Il periodo si conta dalla data
 
@@ -302,7 +334,8 @@ Due modi di usarlo:
 | `andata.da`, `andata.a` | sì | 1 o 2 città, ognuna `{"nome": "...", "aeroporti": ["..."]}` |
 | `ritorno.da`, `ritorno.a` | no | come sopra. Senza `ritorno`: stessa città (tipo 1) |
 | `periodo` | sì | `{"data": "10/05/2027", "giorni_prima_dopo": 7}`, `{"mese": "05/2027"}` oppure `{"dal": "01/05/2027", "al": "20/05/2027"}` |
-| `durata` | sì | `{"min": 10, "max": 14}` |
+| `durata` | sì | `{"min": 10, "max": 14}`. Con `weekend`: giorni di calendario da 1 a 4, facoltativa (default 1-4) |
+| `weekend` | no | `true` = modalità weekend: solo viaggi che toccano sabato o domenica |
 | `max_scali` | no | `null` o assente = qualsiasi, `0` = solo diretti, `1`, `2` |
 | `top` | no | numero di risultati, default 5 |
 | `frequenza_minuti` | no | minuti tra un controllo e l'altro, default 30 |
@@ -482,6 +515,10 @@ ogni controllo, 15), `ITINERARI_VENDITORI` (pagine di prenotazione per combinazi
 
 ## Problemi comuni
 
+**"Nessun volo in vendita".** Controlla città e paese scelti (es. `Napoli, Italia` e non
+`Napoli, Stati Uniti`) e gli aeroporti: un aeroporto piccolo può non avere la rotta.
+Prova un aeroporto vicino più grande, oppure un altro periodo.
+
 **Su Telegram non arriva niente.** Di solito vuol dire che il prezzo non è sceso: il bot
 scrive solo con un nuovo minimo. Per esserne sicuro controlla che il terminale sia
 aperto, che il computer non sia in stop e l'ora di `top.txt`.
@@ -495,6 +532,9 @@ per controllo. Le più economiche sono già verificate.
 **Un prezzo visto su Google Flights non compare.** Controlla che la partenza sia nel
 periodo e gli scali nel massimo. Le offerte delle agenzie cambiano anche da utente a
 utente, e da paese a paese.
+
+**Primo avvio senza internet.** L'elenco di città e aeroporti si scarica al primo avvio
+(poi resta una copia locale per 30 giorni): senza rete il tool si ferma con un messaggio.
 
 **`errori_rete.log`.** Messaggi interni della libreria di rete, es. `excessive load
 generating behavior`: Google chiude una connessione e il tool ne apre un'altra. Non è
@@ -528,6 +568,13 @@ cima e nella scheda **Actions**.
 | `tests/`, `.github/workflows/test.yml` | test e loro esecuzione su GitHub |
 | `telegram.json` | token del bot e chat iscritte (escluso da git) |
 | `data/<ricerca>/` | `top.txt`, `storico.csv` (ogni prezzo trovato, con il paese), `prezzi.json`, `parametri.json`, `errori_rete.log` |
+
+`storico.csv` ha le colonne `controllato, andata, ritorno, prezzo, compagnie, voli, paese`.
+Per le sole andate `ritorno` è `out|<città>` o `ret|<città>`; per i prezzi delle agenzie
+`compagnie` è il nome del venditore e `voli` gli orari. Oltre 5 MB lo storico diventa
+`storico.1.csv`, oltre 1 MB il log diventa `errori_rete.log.1`: si tiene una sola copia
+precedente. All'avvio il tool segnala le ricerche in `data/` con il periodo già passato,
+senza cancellarle.
 
 ## Limiti
 

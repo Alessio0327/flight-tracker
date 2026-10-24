@@ -106,8 +106,8 @@ def invia(testo_html):
 
 def controlla_iscrizioni():
     """Legge i nuovi messaggi al bot: /start iscrive la chat, /stop la toglie.
-    Ritorna le chat iscritte in questa chiamata."""
-    nuove = []
+    Ritorna le chat che hanno inviato /start in questa chiamata (anche se gia' iscritte)."""
+    avviate = []
     with _config_bloccata() as cfg:
         token = cfg["token"]
         aggiornamenti = _chiama(token, "getUpdates", offset=cfg.get("offset", 0), timeout=0)
@@ -120,7 +120,7 @@ def controlla_iscrizioni():
             if testo.startswith("/start"):
                 if chat not in cfg["chat_ids"]:
                     cfg["chat_ids"].append(chat)
-                    nuove.append(chat)
+                avviate.append(chat)
                 risposta = t("bot_benvenuto")
             elif testo.startswith("/stop"):
                 cfg["chat_ids"] = [c for c in cfg["chat_ids"] if c != chat]
@@ -131,7 +131,7 @@ def controlla_iscrizioni():
                 _chiama(token, "sendMessage", chat_id=chat, text=risposta)
             except (OSError, RuntimeError):
                 pass
-    return nuove
+    return avviate
 
 
 def ascolta_in_background():

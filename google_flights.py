@@ -27,24 +27,14 @@ import lingua
 
 
 URL = "https://www.google.com/travel/flights"
-
-
 # Senza questi cookie Google (da IP europeo) risponde con la pagina di consenso.
 CONSENT_COOKIE = "SOCS=CAESEwgDEgk0ODE3Nzk3MjQaAmVuIAEaBgiA_LyaBg; CONSENT=YES+"
-
-
 CALENDARIO_URL = (
     "https://www.google.com/_/FlightsFrontendUi/data/"
     "travel.frontend.flights.FlightsFrontendService/GetCalendarGraph"
 )
-
-
 MAX_GIORNI_CALENDARIO = 61
-
-
 ITINERARI_VENDITORI = 4  # itinerari (orari) di cui aprire la pagina di prenotazione, per combinazione
-
-
 # Servizi per IP pubblico e paese di uscita (Google adatta i prezzi al paese da cui cerchi).
 GEOLOCALIZZAZIONE = ("https://ipinfo.io/json", "https://api.country.is")
 
@@ -192,7 +182,8 @@ def prezzo_venditori(cercatore, p, andata, ritorno):
         ],
         seat_type=SeatType.ECONOMY, stops=stops, sort_by=SortBy.CHEAPEST,
     )
-    itinerari = cercatore.search(filtri, top_n=3, currency=lingua.VALUTA, language="it", country="IT") or []
+    itinerari = cercatore.search(filtri, top_n=ITINERARI_VENDITORI, currency=lingua.VALUTA, language="it",
+                                 country="IT") or []
     # Per l'A/R il prezzo del volo di ritorno e' il totale dell'itinerario.
     itinerari = sorted((it for it in itinerari if it[1].price), key=lambda it: it[1].price)
     meglio = None

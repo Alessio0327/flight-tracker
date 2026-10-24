@@ -59,6 +59,8 @@ TESTI = {
                      "How many {ruolo} cities? [1/2]{suggerimento}: "),
     "invio_uguale": (" (Invio = {valore})", " (Enter = {valore})"),
     "citta_domanda": ("  Citta' di {ruolo}{numero}: ", "  {Ruolo} city{numero}: "),
+    "citta_doppia": ("  {nome} e' gia' tra le citta' scelte: scegline un'altra", "  {nome} is already chosen: pick another city"),
+    "citta_doppie": ("{dove}: due citta' con lo stesso nome", "{dove}: two cities with the same name"),
     "nessuna_citta": ("  nessuna citta' trovata per '{testo}'", "  no city found for '{testo}'"),
     "quale_citta": ("  Quale '{testo}'? (Invio = 1): ", "  Which '{testo}'? (Enter = 1): "),
     "aeroporti_domanda": ("  Aeroporti (Invio = tutti, oppure es. 1,2): ",
@@ -68,6 +70,15 @@ TESTI = {
     "mese_domanda": ("Mese (es. 10/2027): ", "Month (e.g. 10/2027): "),
     "data_domanda": ("Data (es. 15/10/2027): ", "Date, day/month/year (e.g. 15/10/2027): "),
     "giorni_domanda": ("Quanti giorni prima/dopo quella data: ", "How many days before/after that date: "),
+    "modo_durata_domanda": ("Durata: [1] libera (giorni minimi e massimi)  [2] weekend (1-4 giorni con sabato o domenica) (Invio = 1): ",
+                            "Trip length: [1] free (minimum and maximum days)  [2] weekend (1-4 days including Saturday or Sunday) (Enter = 1): "),
+    "weekend_min_domanda": ("Giorni minimi del viaggio, partenza e ritorno compresi (1-4): ",
+                            "Minimum trip days, departure and return included (1-4): "),
+    "weekend_max_domanda": ("Giorni massimi del viaggio, partenza e ritorno compresi ({minimo}-4): ",
+                            "Maximum trip days, departure and return included ({minimo}-4): "),
+    "serve_tra": ("serve un numero tra {minimo} e {massimo}", "a number between {minimo} and {massimo} is needed"),
+    "durata_weekend_non_valida": ("durata: in modalita' weekend serve 1 <= min <= max <= 4 (giorni di calendario)",
+                                  "durata: in weekend mode 1 <= min <= max <= 4 is needed (calendar days)"),
     "durata_min_domanda": ("Durata minima viaggio (giorni): ", "Minimum trip length (days): "),
     "durata_max_domanda": ("Durata massima viaggio (giorni): ", "Maximum trip length (days): "),
     "scali_domanda": ("Massimo scali per tratta (0 = solo diretti, Invio = qualsiasi): ",
@@ -79,10 +90,10 @@ TESTI = {
     "percorso_domanda": ("Percorso del file JSON: ", "JSON file path: "),
     "riassunto_file": (
         "  Andata {andata_da} -> {andata_a}\n  Ritorno {ritorno_da} -> {ritorno_a}\n"
-        "  Partenza dal {inizio} al {fine}, durata {min}-{max} giorni, {scali}, top {top}, ogni {frequenza} min, "
+        "  Partenza dal {inizio} al {fine}, durata {durata}, {scali}, top {top}, ogni {frequenza} min, "
         "prezzi in {valuta}",
         "  Outbound {andata_da} -> {andata_a}\n  Return {ritorno_da} -> {ritorno_a}\n"
-        "  Departure from {inizio} to {fine}, trip length {min}-{max} days, {scali}, top {top}, every {frequenza} min, "
+        "  Departure from {inizio} to {fine}, trip length {durata}, {scali}, top {top}, every {frequenza} min, "
         "prices in {valuta}",
     ),
 
@@ -135,6 +146,10 @@ TESTI = {
         "  {lato}: nessun volo in vendita da {da} a {a} tra il {inizio} e il {fine}.",
         "  {lato}: no flights on sale from {da} to {a} between {inizio} and {fine}.",
     ),
+    "controlla_citta": ("  Controlla città e aeroporti scelti ({da} -> {a}): un aeroporto piccolo o una città\n"
+                        "  con lo stesso nome in un altro paese possono non avere voli.",
+                        "  Check the chosen cities and airports ({da} -> {a}): a small airport, or a city\n"
+                        "  with the same name in another country, may have no flights."),
     "cambia_scelta": ("  Cambia [1] periodo  [2] citta': ", "  Change [1] period  [2] city: "),
     "voli_trovati": (
         "  {lato}: voli in {date} date su {totale}, solo andata da {prezzo} {valuta}.",
@@ -212,8 +227,8 @@ TESTI = {
     "blocco": ("[blocco] Google limita le richieste: {motivo}. Giro interrotto.",
                "[blocked] Google is limiting requests: {motivo}. Check interrupted."),
     "top_titolo": (
-        "Top {n} {tratta}, partenza {inizio} .. {fine}, {min}-{max} giorni, {scali} (aggiornato {adesso})",
-        "Top {n} {tratta}, departure {inizio} .. {fine}, {min}-{max} days, {scali} (updated {adesso})",
+        "Top {n} {tratta}, partenza {inizio} .. {fine}, {durata}, {scali} (aggiornato {adesso})",
+        "Top {n} {tratta}, departure {inizio} .. {fine}, {durata}, {scali} (updated {adesso})",
     ),
     "nessun_prezzo_top": ("Nessun prezzo ancora: date forse non in vendita.", "No prices yet: the dates may not be on sale."),
     "notifica_titolo": ("Volo {tratta}: nuovo minimo", "Flight {tratta}: new lowest price"),
@@ -248,6 +263,11 @@ TESTI = {
     "ar": ("A/R", "Round trip"),
     "due_biglietti": ("2 biglietti", "2 tickets"),
     "durata_gg": ("({n} gg)", "({n} days)"),
+    "durata_gg_weekend": ("({n} gg, {da} → {a})", "({n} days, {da} → {a})"),
+    "giorni_settimana": ("lun mar mer gio ven sab dom", "Mon Tue Wed Thu Fri Sat Sun"),
+    "durata_libera": ("{min}-{max} giorni", "{min}-{max} days"),
+    "durata_weekend": ("weekend, {min}-{max} giorni con sabato o domenica",
+                       "weekend, {min}-{max} days including Saturday or Sunday"),
     "riassunto_2b": ("2 biglietti, andata {va} / ritorno da {torna}", "2 tickets, outbound {va} / return from {torna}"),
     "dettaglio_2b": ("{prezzo} {valuta}  2 biglietti: andata {va}, ritorno da {torna}",
                      "{prezzo} {valuta}  2 tickets: outbound {va}, return from {torna}"),
@@ -272,6 +292,8 @@ TESTI = {
     "tg_partenza": ("📅 Partenza dal {inizio} al {fine}", "📅 Departure from {inizio} to {fine}"),
     "tg_durata": ("🧳 Durata min: {min} gg - max: {max} giorni · {scali} · controllo ogni {frequenza} min · {valuta}",
                   "🧳 Trip length min: {min} d - max: {max} days · {scali} · check every {frequenza} min · {valuta}"),
+    "tg_durata_weekend": ("🧳 Weekend: min {min} - max {max} giorni, con sabato o domenica · {scali} · controllo ogni {frequenza} min · {valuta}",
+                          "🧳 Weekend: min {min} - max {max} days, including Saturday or Sunday · {scali} · check every {frequenza} min · {valuta}"),
     "tg_completa": ("🔎 <b>Scansione completa</b>: {verificate}/{totale} ricerche verificate",
                     "🔎 <b>Scan complete</b>: {verificate}/{totale} searches verified"),
     "tg_in_corso": ("🔎 <b>Scansione in corso</b>: {verificate}/{totale} ricerche verificate, {stimate}/{totale} stimate",
@@ -301,6 +323,14 @@ TESTI = {
                           "❌ <b>Tracker stopped</b> by an error\n{tratta}\n<code>{errore}</code>\nRestart it from the terminal."),
 
     # --- terminale -------------------------------------------------------------
+    "luoghi_offline": ("Non riesco a scaricare l'elenco di citta' e aeroporti ({errore}). Serve internet al primo "
+                       "avvio; poi resta una copia locale per 30 giorni.",
+                       "Cannot download the list of cities and airports ({errore}). Internet is needed on the first "
+                       "start; then a local copy is kept for 30 days."),
+    "ricerche_concluse": ("({n} ricerche in data/ hanno il periodo gia' passato: se non ti servono puoi cancellarne "
+                          "le cartelle, es. {esempio})\n",
+                          "({n} searches in data/ have a period that is already over: if you do not need them you can "
+                          "delete their folders, e.g. {esempio})\n"),
     "altra_istanza": ("Un'altra istanza con questi parametri e' gia' attiva ({cartella}).",
                       "Another instance with these parameters is already running ({cartella})."),
     "da_monitorare": ("\n{totale} ricerche da monitorare ({ar} A/R, {sole} sole andate){future}. Dati in {cartella}",

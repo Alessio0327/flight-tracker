@@ -26,7 +26,8 @@ Moduli:
   tracker.py      avvio e ciclo dei controlli (giro)
   parametri.py    domande all'avvio, controllo del periodo, file JSON
   ricerca.py      date, combinazioni, limiti di Google, proposte, ritmo
-  google_flights.py       richieste a Google Flights e IP di uscita
+  google_flights.py richieste a Google Flights e IP di uscita
+  blocco.py       blocco dei file (macOS, Linux, Windows)
   interfaccia.py  testi della top, messaggi Telegram, barra di avanzamento
   lingua.py       testi in italiano e inglese
   telegram_bot.py iscrizioni e invio Telegram
@@ -41,6 +42,7 @@ import csv
 import html
 import json
 import logging
+import logging.handlers
 import os
 import re
 import sys
@@ -54,7 +56,7 @@ from blocco import blocca
 from google_flights import Bloccato, nuovo_client
 from interfaccia import (
     Barra, breve_posizione, confronto_varianti, conto_alla_rovescia, dettaglio, messaggio_telegram,
-    nome_tratta, orari, riassunto, suggerimento, testo_copertura, testo_posizione, testo_scali,
+    nome_tratta, orari, riassunto, suggerimento, testo_copertura, testo_durata, testo_posizione, testo_scali,
 )
 from lingua import t
 from parametri import chiedi_lingua, chiedi_parametri, parametri_da_file, stampa_riassunto
@@ -65,10 +67,17 @@ from ricerca import (
 import google_flights
 import interfaccia
 import lingua
+import ricerca
 import telegram_bot
 
 
 BASE = Path(__file__).resolve().parent
+# Oltre queste dimensioni il file diventa <nome>.1 (si tiene una sola copia precedente).
+MAX_BYTE_LOG = 1_000_000
+MAX_BYTE_STORICO = 5_000_000
+# Colonne di storico.csv. Per le sole andate "ritorno" e' "out|<citta'>" o "ret|<citta'>";
+# per i venditori "compagnie" e' "<venditore> (venditore)" e "voli" sono gli orari.
+INTESTAZIONE_STORICO = ["controllato", "andata", "ritorno", "prezzo", "compagnie", "voli", "paese"]
 
 
 def giro(p, cartella, client, ritmo, primo=False, posizione_prima=None):
@@ -77,6 +86,7 @@ def giro(p, cartella, client, ritmo, primo=False, posizione_prima=None):
     Il messaggio c'e' solo con un nuovo prezzo minimo o al primo giro dopo l'avvio.
     """
     prezzi_path = cartella / "prezzi.json"
+    prepara_storico(cartella / "storico.csv")  # a ogni giro: con il tool acceso per settimane
     try:
         prezzi = json.loads(prezzi_path.read_text(encoding="utf-8"))
     except FileNotFoundError:
@@ -255,8 +265,8 @@ def giro(p, cartella, client, ritmo, primo=False, posizione_prima=None):
         if cambiata:
             cop["paese_prima"] = posizione_prima["paese"]
     righe = [
-        t("top_titolo", n=len(top), tratta=tratta, inizio=p["inizio"], fine=p["fine"], min=p["giorni_min"],
-          max=p["giorni_max"], scali=testo_scali(p["max_scali"]), adesso=adesso),
+        t("top_titolo", n=len(top), tratta=tratta, inizio=p["inizio"], fine=p["fine"], durata=testo_durata(p),
+          scali=testo_scali(p["max_scali"]), adesso=adesso),
         copertura[0].upper() + copertura[1:],
         testo_posizione(pos),
         "",
@@ -297,8 +307,33 @@ def log_rete(file):
     li stamperebbe sul terminale, in mezzo alla barra di avanzamento.
     """
     file.parent.mkdir(parents=True, exist_ok=True)
-    logging.basicConfig(filename=file, encoding="utf-8", level=logging.WARNING, force=True,
+    gestore = logging.handlers.RotatingFileHandler(file, maxBytes=MAX_BYTE_LOG, backupCount=1, encoding="utf-8")
+    logging.basicConfig(handlers=[gestore], level=logging.WARNING, force=True,
                         format="%(asctime)s %(name)s %(levelname)s %(message)s")
+
+
+def prepara_storico(file):
+    """Intestazione delle colonne in storico.csv (anche nei file creati prima che ci fosse)
+    e rotazione quando il file diventa troppo grande."""
+    if file.exists() and file.stat().st_size > MAX_BYTE_STORICO:
+        file.replace(file.with_name(file.stem + ".1" + file.suffix))
+    intestazione = ",".join(INTESTAZIONE_STORICO)
+    righe = file.read_text(encoding="utf-8").splitlines(keepends=True) if file.exists() else []
+    if not righe or righe[0].strip() != intestazione:
+        file.write_text(intestazione + "\n" + "".join(righe), encoding="utf-8")
+
+
+def avvisa_ricerche_concluse(data):
+    """Ricorda le cartelle delle ricerche con il periodo gia' passato (non le cancella)."""
+    concluse = []
+    for parametri in data.glob("*/parametri.json"):
+        try:
+            if json.loads(parametri.read_text(encoding="utf-8"))["fine"] < ricerca.oggi().isoformat():
+                concluse.append(parametri.parent)
+        except (OSError, ValueError, KeyError):
+            continue
+    if concluse:
+        print(t("ricerche_concluse", n=len(concluse), esempio=concluse[0].relative_to(data.parent)))
 
 
 def prepara_terminale():
@@ -327,6 +362,7 @@ def main():
         return
     if not telegram_bot.configurato():
         print(t("telegram_non_attivo"))
+    avvisa_ricerche_concluse(BASE / "data")
     telegram_bot.ascolta_in_background()  # /start e /stop di chiunque apra il bot
     if not file_parametri:
         p = chiedi_parametri()
@@ -339,6 +375,7 @@ def main():
         f"-{p['giorni_min']}-{p['giorni_max']}gg-scali{'X' if p['max_scali'] is None else p['max_scali']}"
         + (f"-rit_{'_'.join(aeroporti(p['ritorno']['da']))}-{'_'.join(aeroporti(p['ritorno']['a']))}"
            if p["tipo"] == "diversa" else "")
+        + ("-weekend" if p.get("weekend") else "")
         # In EUR il nome resta quello delle versioni precedenti; un'altra valuta ha i suoi dati.
         + (f"-{p['valuta']}" if p.get("valuta", "EUR") != "EUR" else "")
     )
@@ -397,7 +434,9 @@ def main():
         raise
 
 
-
-
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except KeyboardInterrupt:  # Ctrl+C durante le domande o l'avviso di arresto
+        print(t("fermato"))
+        sys.exit(130)

@@ -145,3 +145,12 @@ def test_file_esempio_del_repository_ha_struttura_valida(tmp_path):
     esempio["periodo"] = {"data": tra(60).strftime("%d/%m/%Y"), "giorni_prima_dopo": 3}
     p = parametri.parametri_da_file(scrivi(tmp_path, esempio))
     assert isinstance(date.fromisoformat(p["inizio"]), date)
+
+
+def test_file_citta_con_lo_stesso_nome(tmp_path):
+    napoli_us = {"nome": "Napoli", "aeroporti": ["APF"]}
+    napoli = {"nome": "Napoli", "aeroporti": ["NAP"]}
+    f = file_base(andata={"da": [ROMA], "a": [napoli, napoli_us]})
+    del f["ritorno"]
+    with pytest.raises(ValueError, match="andata.a"):
+        parametri.parametri_da_file(scrivi(tmp_path, f))

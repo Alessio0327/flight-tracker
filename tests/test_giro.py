@@ -134,7 +134,9 @@ def test_posizione_nel_terminale_e_su_telegram(tmp_path, google_finto, capsys):
     assert "203.0.113.7" not in messaggio  # l'IP resta nel terminale
     assert pos["paese"] == "IT"
     assert "IP 203.0.113.7" in (tmp_path / "top.txt").read_text(encoding="utf-8")
-    assert (tmp_path / "storico.csv").read_text(encoding="utf-8").splitlines()[0].endswith(",IT")
+    righe = (tmp_path / "storico.csv").read_text(encoding="utf-8").splitlines()
+    assert righe[0] == ",".join(tracker.INTESTAZIONE_STORICO)
+    assert righe[1].endswith(",IT")
 
 
 def test_paese_cambiato(tmp_path, google_finto, capsys):

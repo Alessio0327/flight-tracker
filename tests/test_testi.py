@@ -174,3 +174,12 @@ def test_messaggi_della_libreria_di_rete_nel_file(tmp_path, capsys):
         assert "excessive load" not in capsys.readouterr().err
     finally:
         logging.basicConfig(force=True, handlers=[logging.NullHandler()])
+
+
+def test_notifica_macos_con_accenti(monkeypatch):
+    chiamate = []
+    monkeypatch.setattr(interfaccia.sys, "platform", "darwin")
+    monkeypatch.setattr(interfaccia.subprocess, "run", lambda args, check: chiamate.append(args))
+    interfaccia.notifica("Volo Città", "656 EUR → Osaka")
+    script = chiamate[0][2]
+    assert "Città" in script and "→" in script and "\\u" not in script

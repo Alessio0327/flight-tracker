@@ -54,7 +54,8 @@ def test_start_iscrive_e_risponde(bot):
 
 def test_start_ripetuto_non_duplica(bot):
     bot.coda = [messaggio(10, 1, "/start")]
-    assert telegram_bot.controlla_iscrizioni() == []
+    # la chat risulta "avviata" (serve al setup per non aspettare all'infinito), ma non duplicata
+    assert telegram_bot.controlla_iscrizioni() == [1]
     assert bot.config()["chat_ids"] == [1]
 
 

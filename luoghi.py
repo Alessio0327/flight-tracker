@@ -34,8 +34,14 @@ def _norm(s):
 
 
 class Luoghi:
-    def __init__(self, lingua="it"):
-        self.lingua = lingua
+    def __init__(self, lingua="it", paese=None):
+        """paese: codice del paese dell'utente (es. "IT"): a parita' di nome le sue citta'
+        vengono prima, cosi' "Napoli" propone Napoli (NAP) prima di Naples in Florida."""
+        self.lingua, self.paese = lingua, paese
+        try:
+            self.paesi = {p["code"]: p for p in _carica("countries")}
+        except OSError:
+            self.paesi = {}  # senza nomi dei paesi si mostra il codice
         self.aeroporti = {}  # codice citta' -> [(iata, nome aeroporto)]
         for a in _carica("airports"):
             if a.get("iata_type") == "airport" and a.get("flightable"):
@@ -45,6 +51,14 @@ class Luoghi:
         self.per_aeroporto = {
             iata: (citta, nome) for citta, lista in self.aeroporti.items() for iata, nome in lista
         }
+
+    def nome_paese(self, codice):
+        p = self.paesi.get(codice)
+        if not p:
+            return codice
+        if self.lingua != "it" and p["name_translations"].get(self.lingua):
+            return p["name_translations"][self.lingua]
+        return p.get("name") or codice
 
     def nome_citta(self, c):
         """Nome della citta' nella lingua scelta (il dataset e' in italiano, con le traduzioni)."""
@@ -68,7 +82,9 @@ class Luoghi:
                 p = 2
             else:
                 continue
-            # A parita', prima le citta' con piu' aeroporti (di solito le piu' grandi).
-            punteggi.append((p, -len(self.aeroporti[c["code"]]), self.nome_citta(c), c))
-        punteggi.sort(key=lambda x: x[:3])
-        return [x[3] for x in punteggi]
+            # A parita': prima il paese dell'utente, poi le citta' con piu' aeroporti
+            # (di solito le piu' grandi).
+            altro_paese = c.get("country_code") != self.paese
+            punteggi.append((p, altro_paese, -len(self.aeroporti[c["code"]]), self.nome_citta(c), c))
+        punteggi.sort(key=lambda x: x[:4])
+        return [x[4] for x in punteggi]

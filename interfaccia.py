@@ -87,7 +87,9 @@ def breve_posizione(pos):
 
 def notifica(titolo, testo):
     if sys.platform == "darwin":
-        script = f"display notification {json.dumps(testo)} with title {json.dumps(titolo)}"
+        # ensure_ascii=False: AppleScript non capisce gli escape \uXXXX (accenti, frecce).
+        script = (f"display notification {json.dumps(testo, ensure_ascii=False)} "
+                  f"with title {json.dumps(titolo, ensure_ascii=False)}")
         subprocess.run(["osascript", "-e", script], check=False)
 
 
@@ -114,8 +116,9 @@ def intestazione_telegram(p, titolo, cop):
         f"🛫 {e(etichetta(p['andata']['da']))} → {e(etichetta(p['andata']['a']))}",
         f"🛬 {e(etichetta(p['ritorno']['da']))} → {e(etichetta(p['ritorno']['a']))}",
         t("tg_partenza", inizio=giorno(p["inizio"]), fine=giorno(p["fine"])),
-        t("tg_durata", min=p["giorni_min"], max=p["giorni_max"], scali=testo_scali(p["max_scali"]),
-          frequenza=p["frequenza_minuti"]),
+        t("tg_durata_weekend" if p.get("weekend") else "tg_durata",
+          min=p["giorni_min"] + (1 if p.get("weekend") else 0), max=p["giorni_max"] + (1 if p.get("weekend") else 0),
+          scali=testo_scali(p["max_scali"]), frequenza=p["frequenza_minuti"]),
     ]
     # Solo il paese: l'IP non va mandato a tutti gli iscritti del bot.
     if cop.get("paese_prima"):
@@ -123,9 +126,7 @@ def intestazione_telegram(p, titolo, cop):
                        ora=f"{bandiera(cop['paese'])} {cop['paese']}"))
     elif cop.get("paese"):
         righe.append(t("tg_posizione", bandiera=bandiera(cop["paese"]), paese=cop["paese"]))
-    righe += [
-        "",
-    ]
+    righe.append("")
     if cop["verificate"] == cop["totale"]:
         righe.append(t("tg_completa", verificate=cop["verificate"], totale=cop["totale"]))
     else:
@@ -159,6 +160,22 @@ def nome_tratta(p):
     return t("tratta_ritorno", andata=andata, da=nomi(p["ritorno"]["da"]), a=nomi(p["ritorno"]["a"]))
 
 
+def testo_durata(p):
+    """Durata del viaggio nei testi. In modalita' weekend in giorni di calendario."""
+    if p.get("weekend"):
+        return t("durata_weekend", min=p["giorni_min"] + 1, max=p["giorni_max"] + 1)
+    return t("durata_libera", min=p["giorni_min"], max=p["giorni_max"])
+
+
+def durata_viaggio(x):
+    """"(12 gg)", oppure in modalita' weekend "(3 gg, ven → dom)" con i giorni di calendario."""
+    if not x.get("weekend"):
+        return t("durata_gg", n=_gg(x))
+    giorni = t("giorni_settimana").split()
+    andata, ritorno = date.fromisoformat(x["andata"]), date.fromisoformat(x["ritorno"])
+    return t("durata_gg_weekend", n=_gg(x) + 1, da=giorni[andata.weekday()], a=giorni[ritorno.weekday()])
+
+
 def _gg(x):
     return (date.fromisoformat(x["ritorno"]) - date.fromisoformat(x["andata"])).days
 
@@ -166,7 +183,7 @@ def _gg(x):
 def riassunto(x):
     """Una riga: "701 EUR 2 biglietti, andata Tokyo / ritorno da Osaka, 2027-03-08 -> 2027-03-22"."""
     tipo = f"{t('ar')} {x['va']}" if x["tipo"] == "ar" else t("riassunto_2b", va=x["va"], torna=x["torna"])
-    return f"{soldi(x['prezzo'])} {tipo}, {x['andata']} -> {x['ritorno']} {t('durata_gg', n=_gg(x))}"
+    return f"{soldi(x['prezzo'])} {tipo}, {x['andata']} -> {x['ritorno']} {durata_viaggio(x)}"
 
 
 def dettaglio(x, prezzi):
@@ -174,14 +191,14 @@ def dettaglio(x, prezzi):
     if x["tipo"] == "ar":
         v = prezzi[x["chiavi"][0]]
         return (
-            f"{descrivi_prezzo(v)}  {t('ar')} {x['va']}  {x['andata']} -> {x['ritorno']} {t('durata_gg', n=_gg(x))}  "
+            f"{descrivi_prezzo(v)}  {t('ar')} {x['va']}  {x['andata']} -> {x['ritorno']} {durata_viaggio(x)}  "
             f"{v['compagnie']}  [{v['tratte']}]  {t('visto', quando=v['controllato'])}\n"
             + (t("prezzo_giudizio", giudizio=giudizio(v)) + "\n" if giudizio(v) else "")
             + f"   {v['link']}"
         )
     va, torna = (prezzi[k] for k in x["chiavi"])
     righe = [t("dettaglio_2b", prezzo=x["prezzo"], va=x["va"], torna=x["torna"])
-             + f"  {x['andata']} -> {x['ritorno']} {t('durata_gg', n=_gg(x))}"]
+             + f"  {x['andata']} -> {x['ritorno']} {durata_viaggio(x)}"]
     larghezza = max(len(t("lato_andata")), len(t("lato_ritorno")))
     for nome, v in ((t("lato_andata"), va), (t("lato_ritorno"), torna)):
         righe.append(f"   {nome:<{larghezza}} {soldi(v['prezzo'])}  {v['compagnie']}  [{v['tratte']}]  "
@@ -224,7 +241,7 @@ def messaggio_telegram(p, top, prezzi, cop, confronto, titolo=None):
     gm = lambda s: f"{date.fromisoformat(s):%d/%m}"
     righe = [intestazione_telegram(p, titolo or t("tg_nuovo_minimo"), cop), "", f"🏆 <b>Top {len(top)}</b>"]
     for i, x in enumerate(top, 1):
-        date_txt = f"   📆 {gm(x['andata'])} → {gm(x['ritorno'])} {t('durata_gg', n=_gg(x))}"
+        date_txt = f"   📆 {gm(x['andata'])} → {gm(x['ritorno'])} {durata_viaggio(x)}"
         if x["tipo"] == "ar":
             v = prezzi[x["chiavi"][0]]
             blocco = [f"{i}. <b>{soldi(x['prezzo'])}</b> · {t('ar')} {e(x['va'])}", date_txt]

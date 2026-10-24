@@ -10,24 +10,14 @@ from lingua import t
 
 
 PAUSA_SECONDI = 3
-
-
 RICERCHE_MAX_PER_GIRO = 100  # a ritmo normale; dimezzato a ogni rallentamento
-
-
 VERIFICA_DA_STIMA = 15  # combinazioni piu' economiche del calendario da verificare ogni giro
-
 
 # Limiti di Google Flights, misurati: la ricerca completa accetta voli fino a oggi + 330
 # giorni (conta l'ultimo volo, cioe' il ritorno), il calendario prezzi fino a oggi + 305.
 LIMITE_RICERCA_GIORNI = 330
-
-
 LIMITE_CALENDARIO_GIORNI = 305
-
-
 PAUSA_CALENDARIO = 1
-
 
 GIORNI_FUORI_PERIODO = 7  # giorni prima/dopo il periodo in cui cercare date piu' economiche
 
@@ -92,6 +82,27 @@ def fuori_periodo(p, x):
     return not p["inizio"] <= x["andata"] <= p["fine"]
 
 
+GIORNI_WEEKEND_MAX = 4  # modalita' weekend: viaggi da 1 a 4 giorni di calendario
+
+
+def nel_weekend(andata, ritorno):
+    """True se il viaggio tocca sabato o domenica (giorni di andata e ritorno compresi)."""
+    return any((andata + timedelta(days=i)).weekday() >= 5 for i in range((ritorno - andata).days + 1))
+
+
+def coppie_date(p):
+    """(andata, ritorno) da cercare: ogni partenza del periodo per ogni durata.
+
+    giorni_min/giorni_max sono differenze tra le date (ritorno - andata). In modalita'
+    weekend (p["weekend"]) restano solo i viaggi che toccano sabato o domenica.
+    """
+    for andata in _giorni(*finestra_partenze(p)):
+        for durata in range(p["giorni_min"], p["giorni_max"] + 1):
+            ritorno = andata + timedelta(days=durata)
+            if not p.get("weekend") or nel_weekend(andata, ritorno):
+                yield andata, ritorno
+
+
 def combinazioni(p, anche_future=False):
     """Coppie "andata|ritorno" per l'andata e ritorno sullo stesso biglietto.
 
@@ -101,21 +112,20 @@ def combinazioni(p, anche_future=False):
     if not citta_ar(p):
         return []
     out = []
-    for andata in _giorni(*finestra_partenze(p)):
-        for durata in range(p["giorni_min"], p["giorni_max"] + 1):
-            ritorno = andata + timedelta(days=durata)
-            if anche_future or ritorno <= limite(LIMITE_RICERCA_GIORNI):
-                out.append(f"{andata.isoformat()}|{ritorno.isoformat()}")
+    for andata, ritorno in coppie_date(p):
+        if anche_future or ritorno <= limite(LIMITE_RICERCA_GIORNI):
+            out.append(f"{andata.isoformat()}|{ritorno.isoformat()}")
     return out
 
 
 def sole_andate(p, anche_future=False):
     """Voli di sola andata da cercare: "out|<citta' di arrivo>|data" e "ret|<citta' di partenza>|data"."""
+    coppie = list(coppie_date(p))
     out = []
-    for lato, citta, finestra in (("out", p["andata"]["a"], finestra_partenze(p)),
-                                  ("ret", p["ritorno"]["da"], finestra_ritorni(p))):
+    for lato, citta, giorni in (("out", p["andata"]["a"], sorted({a for a, _ in coppie})),
+                                ("ret", p["ritorno"]["da"], sorted({r for _, r in coppie}))):
         for c in citta:
-            for giorno in _giorni(*finestra):
+            for giorno in giorni:
                 if anche_future or giorno <= limite(LIMITE_RICERCA_GIORNI):
                     out.append(f"{lato}|{c['nome']}|{giorno.isoformat()}")
     return out
@@ -202,17 +212,15 @@ def proposte(p, prezzi_di):
         for y in p["ritorno"]["da"]:
             if p["tipo"] == "stessa" and x["nome"] != y["nome"]:
                 continue
-            for andata in _giorni(*finestra_partenze(p)):
+            for andata, ritorno in coppie_date(p):
                 k_out = f"out|{x['nome']}|{andata.isoformat()}"
-                if not prezzi_di.get(k_out):
-                    continue
-                for durata in range(p["giorni_min"], p["giorni_max"] + 1):
-                    ritorno = (andata + timedelta(days=durata)).isoformat()
-                    k_ret = f"ret|{y['nome']}|{ritorno}"
-                    if prezzi_di.get(k_ret):
-                        out.append({"prezzo": prezzi_di[k_out] + prezzi_di[k_ret], "tipo": "2b",
-                                    "andata": andata.isoformat(), "ritorno": ritorno,
-                                    "chiavi": [k_out, k_ret], "va": x["nome"], "torna": y["nome"]})
+                k_ret = f"ret|{y['nome']}|{ritorno.isoformat()}"
+                if prezzi_di.get(k_out) and prezzi_di.get(k_ret):
+                    out.append({"prezzo": prezzi_di[k_out] + prezzi_di[k_ret], "tipo": "2b",
+                                "andata": andata.isoformat(), "ritorno": ritorno.isoformat(),
+                                "chiavi": [k_out, k_ret], "va": x["nome"], "torna": y["nome"]})
+    for x in out:
+        x["weekend"] = bool(p.get("weekend"))
     return sorted(out, key=lambda x: x["prezzo"])
 
 
