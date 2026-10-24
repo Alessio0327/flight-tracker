@@ -536,6 +536,12 @@ with a message.
 generating behavior`: Google closes a connection and the tool opens another one. It is
 not a block.
 
+## Versions
+
+What changed in each version is in [CHANGELOG.md](CHANGELOG.md) and on the
+[Releases](https://github.com/Alessio0327/flight-tracker/releases) page. The installed
+version is shown at startup or with `.venv/bin/python tracker.py --version`. To update: `git pull`.
+
 ## Development and tests
 
 The tests check the logic without any request to Google or Telegram, and never use
@@ -561,6 +567,7 @@ badge at the top and in the **Actions** tab.
 | `telegram_bot.py` | Telegram subscriptions and messages |
 | `blocco.py` | file lock, same on macOS, Linux and Windows |
 | `ricerche/esempio.json` | example parameters |
+| `CHANGELOG.md` | what changed in each version |
 | `tests/`, `.github/workflows/test.yml` | tests and their run on GitHub |
 | `telegram.json` | bot token and subscribed chats (excluded from git) |
 | `data/<search>/` | `top.txt`, `storico.csv` (every price found, with the country), `prezzi.json`, `parametri.json`, `errori_rete.log` |

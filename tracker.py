@@ -36,6 +36,7 @@ Moduli:
 Uso: .venv/bin/python tracker.py
      .venv/bin/python tracker.py ricerche/esempio.json   (avvio diretto, senza domande)
      .venv/bin/python tracker.py --setup-telegram   (attiva notifiche Telegram)
+     .venv/bin/python tracker.py --version          (versione; novita' in CHANGELOG.md)
 """
 
 import csv
@@ -71,6 +72,7 @@ import ricerca
 import telegram_bot
 
 
+VERSIONE = "1.4.0"  # da aggiornare insieme a CHANGELOG.md a ogni nuova versione
 BASE = Path(__file__).resolve().parent
 # Oltre queste dimensioni il file diventa <nome>.1 (si tiene una sola copia precedente).
 MAX_BYTE_LOG = 1_000_000
@@ -346,6 +348,10 @@ def prepara_terminale():
 
 def main():
     prepara_terminale()
+    if "--version" in sys.argv:
+        print(f"flight-tracker {VERSIONE}")
+        return
+    print(f"flight-tracker {VERSIONE}")
     log_rete(BASE / "data" / "errori_rete.log")  # fino a quando la cartella della ricerca non e' nota
     file_parametri = [a for a in sys.argv[1:] if not a.startswith("--")]
     if file_parametri:

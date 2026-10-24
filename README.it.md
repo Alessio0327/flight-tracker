@@ -540,6 +540,12 @@ utente, e da paese a paese.
 generating behavior`: Google chiude una connessione e il tool ne apre un'altra. Non è
 un blocco.
 
+## Versioni
+
+Le novità di ogni versione sono in [CHANGELOG.md](CHANGELOG.md) (in inglese) e nella pagina
+[Releases](https://github.com/Alessio0327/flight-tracker/releases). La versione installata
+si vede all'avvio o con `.venv/bin/python tracker.py --version`. Per aggiornare: `git pull`.
+
 ## Sviluppo e test
 
 I test controllano la logica senza fare richieste a Google né a Telegram, e non usano
@@ -565,6 +571,7 @@ cima e nella scheda **Actions**.
 | `telegram_bot.py` | iscrizioni e messaggi Telegram |
 | `blocco.py` | blocco dei file, uguale su macOS, Linux e Windows |
 | `ricerche/esempio.json` | esempio di parametri |
+| `CHANGELOG.md` | novità di ogni versione |
 | `tests/`, `.github/workflows/test.yml` | test e loro esecuzione su GitHub |
 | `telegram.json` | token del bot e chat iscritte (escluso da git) |
 | `data/<ricerca>/` | `top.txt`, `storico.csv` (ogni prezzo trovato, con il paese), `prezzi.json`, `parametri.json`, `errori_rete.log` |
