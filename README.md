@@ -55,6 +55,9 @@ typical 690 EUR for that route.
 - **Nearby dates:** if leaving up to 7 days before or after your period is cheaper, it
   tells you separately.
 - **Telegram notifications:** when the price drops, to anyone who presses Start on your bot.
+- **Target price:** optionally, the bot alerts you only when the price drops below the
+  amount you choose.
+- **Private search:** a search can send nothing to Telegram.
 - **Search country:** shows the IP and country your searches leave from (e.g. through a
   VPN), because Google adapts prices to the country.
 - **Italian or English, any currency** (EUR, USD, GBP, ...).
@@ -132,10 +135,15 @@ Maximum trip length (days): 14
 Maximum stops per leg (0 = direct only, Enter = any): 1
 How many top results to show: 5
 Update frequency (minutes): 60
+Telegram alerts: [1] at every new lowest price  [2] only below a price you choose  [3] none, private search (Enter = 1): 2
+Target price (EUR): 450
 
 143 searches to monitor (round trip: 75, one-way: 68). Data in .../data/FCO-JFK_EWR_BOS-...
 Update every 60 min (gets longer by itself if Google limits requests). Ctrl+C to stop.
 ```
+
+Your answers appear in green, to tell them apart from the questions. If your terminal
+does not show colors well, start the tool with `NO_COLOR=1 .venv/bin/python tracker.py`.
 
 Then the tool works on its own. Leave the terminal open and stop it with Ctrl+C once
 you have booked.
@@ -151,6 +159,7 @@ Accepted answers:
 | Days before/after | `7` = 7 days before and 7 after the date |
 | Trip length | Enter or `1` = minimum and maximum days; `2` = weekend, then days from 1 to 4 |
 | Stops | `0` = direct only, `1`, `2`, Enter = any |
+| Alerts | Enter or `1` = at every new lowest price; `2` = only below the target price, asked right after; `3` = no Telegram messages (private search) |
 | Currency | 3-letter code: `EUR`, `USD`, `GBP`, `JPY`, ... Enter = EUR |
 
 **Choosing cities.** When several cities share a name, the tool lists them with the full
@@ -310,7 +319,9 @@ format of `ricerche/esempio.json` (field names are in Italian):
   "max_scali": 1,
   "top": 5,
   "frequenza_minuti": 60,
-  "valuta": "EUR"
+  "valuta": "EUR",
+  "avvisa_sotto": null,
+  "telegram": true
 }
 ```
 
@@ -336,6 +347,8 @@ Two ways to use it:
 | `top` | no | number of results, default 5 |
 | `frequenza_minuti` | no | minutes between checks, default 30 |
 | `valuta` (currency) | no | 3-letter code, default `"EUR"` |
+| `telegram` | no | `false` = private search: no messages to the bot and its subscribers. Default `true` |
+| `avvisa_sotto` (alert below) | no | target price (whole number, in the search currency): alerts only below it. Missing or `null` = at every new lowest price |
 
 In the file, cities are written with airport codes; `nome` is only used in messages.
 If the file is not valid the tool says what is wrong (e.g. `missing field 'periodo'`).
@@ -362,12 +375,24 @@ remove a chat by hand, delete its number from `chat_ids` in `telegram.json`.
 
 | When | Message |
 |---|---|
-| First check after start | 🚀 Tracker started, with the full top list |
+| First check after start | 🚀 Tracker started, with the full top list. With a target price not reached yet, a single line: `🚀 Tracker started · Naples -> Milan` and `🎯 Target 30 EUR · now 33 EUR (3 EUR to go)` |
 | New lowest price | ✈️ New lowest price, with the full top list |
+| New lowest price below the target (if set) | 🎯 Below your target, with the full top list. Nothing arrives above the target |
 | Google limits requests | ⚠️ Slowing down, with the new pace |
 | Google back to normal | ✅ Speeding up |
 | Ctrl+C | ⏹ Tracker stopped by you |
 | Unexpected error | ❌ Tracker stopped by an error |
+
+**Private search.** At the alerts question answer `3` (in the JSON file
+`"telegram": false`): that search sends no message at all, not even start or stop, to the
+bot and its subscribers. Other searches keep using Telegram normally; the macOS system
+notification stays.
+
+**Target price.** If set, the bot writes only when a new lowest price is equal to or
+below the target (🎯), once per drop. At startup, if the target is not reached yet, only
+one line arrives with the target and how far the price is, without the top list. The terminal, `top.txt` and the messages show
+`🎯 Target 450 EUR · now 489 EUR (39 EUR to go)`. Changing the target does not change the
+data folder: restart and the tool resumes the prices already found.
 
 A check without a better price sends nothing: the bot writes only when there is news. The
 bot cannot tell you whether the tracker is running: it is a process in your computer's

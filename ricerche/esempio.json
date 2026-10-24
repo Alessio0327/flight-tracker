@@ -19,5 +19,7 @@
   "max_scali": 1,
   "top": 5,
   "frequenza_minuti": 60,
-  "valuta": "EUR"
+  "valuta": "EUR",
+  "avvisa_sotto": null,
+  "telegram": true
 }

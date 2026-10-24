@@ -55,6 +55,9 @@ lista di Google e i 690 EUR tipici per quella tratta.
 - **Date vicine:** se partire fino a 7 giorni prima o dopo il periodo costa meno, te lo
   segnala a parte.
 - **Notifiche Telegram:** quando il prezzo scende, a chiunque prema Avvia sul tuo bot.
+- **Prezzo obiettivo:** se vuoi, il bot ti avvisa solo quando il prezzo scende sotto la
+  cifra che hai scelto.
+- **Ricerca privata:** una ricerca può non mandare niente su Telegram.
 - **Paese di ricerca:** mostra IP e paese da cui partono le ricerche (es. con una VPN),
   perché Google adatta i prezzi al paese.
 - **Italiano o inglese, valuta a scelta** (EUR, USD, GBP, ...).
@@ -136,10 +139,15 @@ Durata massima viaggio (giorni): 14
 Massimo scali per tratta (0 = solo diretti, Invio = qualsiasi): 1
 Quanti migliori risultati mostrare: 5
 Frequenza aggiornamento (minuti): 60
+Avvisi Telegram: [1] a ogni nuovo prezzo minimo  [2] solo sotto un prezzo che scegli  [3] nessuno, ricerca privata (Invio = 1): 2
+Prezzo obiettivo (EUR): 450
 
 143 ricerche da monitorare (75 A/R, 68 sole andate). Dati in .../data/FCO-JFK_EWR_BOS-...
 Aggiornamento ogni 60 min (si allunga da solo se Google limita). Ctrl+C per fermare.
 ```
+
+Le tue risposte compaiono in verde, per distinguerle dalle domande. Se il tuo terminale
+non mostra bene i colori, lancia il tool con `NO_COLOR=1 .venv/bin/python tracker.py`.
 
 Poi il tool lavora da solo. Lascia il terminale aperto e fermalo con Ctrl+C quando hai
 prenotato.
@@ -155,6 +163,7 @@ Risposte accettate:
 | Giorni prima/dopo | `7` = 7 giorni prima e 7 dopo la data |
 | Durata | Invio o `1` = giorni minimi e massimi; `2` = weekend, poi giorni da 1 a 4 |
 | Scali | `0` = solo diretti, `1`, `2`, Invio = qualsiasi |
+| Avvisi | Invio o `1` = a ogni nuovo minimo; `2` = solo sotto il prezzo obiettivo, che il tool chiede subito dopo; `3` = nessun messaggio Telegram (ricerca privata) |
 | Valuta | codice di 3 lettere: `EUR`, `USD`, `GBP`, `JPY`, ... Invio = EUR |
 
 **Scelta delle città.** Quando più città hanno lo stesso nome, il tool le elenca con il
@@ -314,7 +323,9 @@ formato di `ricerche/esempio.json`:
   "max_scali": 1,
   "top": 5,
   "frequenza_minuti": 60,
-  "valuta": "EUR"
+  "valuta": "EUR",
+  "avvisa_sotto": null,
+  "telegram": true
 }
 ```
 
@@ -340,6 +351,8 @@ Due modi di usarlo:
 | `top` | no | numero di risultati, default 5 |
 | `frequenza_minuti` | no | minuti tra un controllo e l'altro, default 30 |
 | `valuta` | no | codice di 3 lettere, default `"EUR"` |
+| `telegram` | no | `false` = ricerca privata: nessun messaggio al bot e ai suoi iscritti. Default `true` |
+| `avvisa_sotto` | no | prezzo obiettivo (intero, nella valuta della ricerca): avvisi solo sotto questa cifra. Assente o `null` = a ogni nuovo minimo |
 
 Nel file le città si scrivono con i codici aeroporto; `nome` serve solo per i messaggi.
 Se il file non è valido il tool dice cosa non va (es. `manca il campo 'periodo'`).
@@ -366,12 +379,24 @@ cancella il suo numero da `chat_ids` in `telegram.json`.
 
 | Quando | Messaggio |
 |---|---|
-| Primo controllo dopo l'avvio | 🚀 Tracker avviato, con la top completa |
+| Primo controllo dopo l'avvio | 🚀 Tracker avviato, con la top completa. Con un prezzo obiettivo non ancora raggiunto, una riga sola: `🚀 Tracker avviato · Napoli -> Milano` e `🎯 Obiettivo 30 EUR · ora 33 EUR (mancano 3 EUR)` |
 | Nuovo prezzo minimo | ✈️ Nuovo prezzo minimo, con la top completa |
+| Nuovo minimo sotto il prezzo obiettivo (se l'hai impostato) | 🎯 Sotto il tuo obiettivo, con la top completa. Sopra l'obiettivo non arriva niente |
 | Google limita le richieste | ⚠️ Rallento, con il nuovo ritmo |
 | Google torna normale | ✅ Accelero |
 | Ctrl+C | ⏹ Tracker fermato da te |
 | Errore imprevisto | ❌ Tracker fermato per un errore |
+
+**Ricerca privata.** Alla domanda sugli avvisi rispondi `3` (nel file JSON
+`"telegram": false`): quella ricerca non manda nessun messaggio, né di avvio né di
+arresto, al bot e a chi è iscritto. Le altre ricerche continuano a usare Telegram
+normalmente; la notifica di sistema su macOS resta.
+
+**Prezzo obiettivo.** Se l'hai impostato, il bot scrive solo quando un nuovo minimo è
+uguale o sotto l'obiettivo (🎯), una volta per ogni ribasso. All'avvio, se l'obiettivo non è
+ancora raggiunto, arriva solo una riga con l'obiettivo e quanto manca, senza la top. Nel terminale, in `top.txt` e
+nei messaggi c'è la riga `🎯 Obiettivo 450 EUR · ora 489 EUR (mancano 39 EUR)`. Cambiare
+l'obiettivo non cambia la cartella dei dati: rilanci e il tool riprende i prezzi trovati.
 
 Un controllo senza un prezzo migliore non manda niente: il bot scrive solo quando c'è una
 novità. Il bot non può dirti se il tracker sta girando: è un processo nel terminale del

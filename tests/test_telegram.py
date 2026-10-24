@@ -124,3 +124,11 @@ def test_blocco_esclusivo(tmp_path):
             blocco.blocca(secondo, attendi=False)
     with open(file, "w") as terzo:  # chiusi i primi due, il blocco e' libero
         blocco.blocca(terzo, attendi=False)
+
+
+def test_ricerca_privata_non_invia(bot):
+    import tracker
+    tracker.invio_telegram({"telegram": False})("messaggio privato")
+    assert bot.inviati == []
+    tracker.invio_telegram({})("messaggio normale")  # senza il campo: Telegram attivo
+    assert [testo for _, testo in bot.inviati] == ["messaggio normale"]

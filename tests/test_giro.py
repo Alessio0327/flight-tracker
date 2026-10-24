@@ -154,3 +154,38 @@ def test_posizione_non_rilevata(tmp_path, google_finto, monkeypatch, capsys):
     assert pos is None
     assert "Paese di uscita non rilevato" in capsys.readouterr().out
     assert "🌍" not in messaggio
+
+
+def test_obiettivo_non_raggiunto_nessun_avviso(tmp_path, google_finto, capsys):
+    p = viaggio(giorni_partenza=2, durata=(14, 14))
+    p["avvisa_sotto"] = 700  # i prezzi finti nel periodo partono da 800
+    _, messaggio, _ = tracker.giro(p, tmp_path, None, tracker.Ritmo())
+    assert messaggio is None
+    assert "🎯 Obiettivo 700 EUR · ora 800 EUR (mancano 100 EUR)" in capsys.readouterr().out
+
+
+def test_obiettivo_raggiunto(tmp_path, google_finto):
+    p = viaggio(giorni_partenza=2, durata=(14, 14))
+    p["avvisa_sotto"] = 850
+    _, messaggio, _ = tracker.giro(p, tmp_path, None, tracker.Ritmo())
+    assert messaggio.startswith("🎯 <b>Sotto il tuo obiettivo</b>: 800 EUR (obiettivo 850 EUR)")
+    assert "🎯 Obiettivo 850 EUR · ora 800 EUR: raggiunto" in messaggio
+
+
+def test_obiettivo_all_avvio_messaggio_comunque(tmp_path, google_finto):
+    p = viaggio(giorni_partenza=2, durata=(14, 14))
+    p["avvisa_sotto"] = 700
+    tracker.giro(p, tmp_path, None, tracker.Ritmo())
+    _, messaggio, _ = tracker.giro(p, tmp_path, None, tracker.Ritmo(), primo=True)
+    # obiettivo non raggiunto: avvio in una riga, senza la top
+    assert messaggio == ("🚀 <b>Tracker avviato</b> · Roma -&gt; Osaka\n"
+                         "🎯 Obiettivo 700 EUR · ora 800 EUR (mancano 100 EUR)")
+
+
+def test_obiettivo_gia_raggiunto_all_avvio(tmp_path, google_finto):
+    p = viaggio(giorni_partenza=2, durata=(14, 14))
+    p["avvisa_sotto"] = 850
+    tracker.giro(p, tmp_path, None, tracker.Ritmo())
+    _, messaggio, _ = tracker.giro(p, tmp_path, None, tracker.Ritmo(), primo=True)
+    assert messaggio.startswith("🎯 <b>Sotto il tuo obiettivo</b>: 800 EUR")
+    assert "🏆 <b>Top" in messaggio

@@ -154,3 +154,21 @@ def test_file_citta_con_lo_stesso_nome(tmp_path):
     del f["ritorno"]
     with pytest.raises(ValueError, match="andata.a"):
         parametri.parametri_da_file(scrivi(tmp_path, f))
+
+
+def test_file_avvisa_sotto(tmp_path):
+    assert parametri.parametri_da_file(scrivi(tmp_path, file_base(avvisa_sotto=600)))["avvisa_sotto"] == 600
+    assert parametri.parametri_da_file(scrivi(tmp_path, file_base()))["avvisa_sotto"] is None
+    for sbagliato in (0, "600", 5.5, True):
+        with pytest.raises(ValueError, match="avvisa_sotto"):
+            parametri.parametri_da_file(scrivi(tmp_path, file_base(avvisa_sotto=sbagliato)))
+
+
+def test_file_telegram(tmp_path, capsys):
+    p = parametri.parametri_da_file(scrivi(tmp_path, file_base(telegram=False)))
+    assert p["telegram"] is False
+    parametri.stampa_riassunto(p)
+    assert "senza Telegram" in capsys.readouterr().out
+    assert parametri.parametri_da_file(scrivi(tmp_path, file_base()))["telegram"] is True
+    with pytest.raises(ValueError, match="telegram"):
+        parametri.parametri_da_file(scrivi(tmp_path, file_base(telegram="no")))

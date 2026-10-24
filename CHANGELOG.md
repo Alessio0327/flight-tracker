@@ -9,6 +9,17 @@ PATCH for fixes.
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-10-24
+
+### Added
+- Target price: optional alert only when a new lowest price is at or below a price you
+  choose (startup question or `"avvisa_sotto"` in the JSON file); a 🎯 line shows the
+  target and how far the current price is. At startup, with the target not reached yet,
+  Telegram gets a one-line message instead of the full top list.
+- Private search: a search can send nothing to Telegram (alerts option 3, or
+  `"telegram": false` in the JSON file).
+- User answers are shown in green in the terminal (disable with `NO_COLOR=1`).
+
 ## [1.4.0] - 2026-10-24
 
 ### Added
@@ -85,7 +96,8 @@ PATCH for fixes.
   airports, period and trip length, price rating, agency prices, adaptive rate limiter,
   progress bar, macOS and Telegram notifications.
 
-[Unreleased]: https://github.com/Alessio0327/flight-tracker/compare/v1.4.0...HEAD
+[Unreleased]: https://github.com/Alessio0327/flight-tracker/compare/v1.5.0...HEAD
+[1.5.0]: https://github.com/Alessio0327/flight-tracker/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/Alessio0327/flight-tracker/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/Alessio0327/flight-tracker/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/Alessio0327/flight-tracker/compare/v1.1.0...v1.2.0

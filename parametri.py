@@ -8,7 +8,7 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 
 from google_flights import nuovo_client, voli_in_vendita
-from interfaccia import testo_durata, testo_scali
+from interfaccia import leggi, testo_durata, testo_scali
 from lingua import t
 from luoghi import Luoghi
 from ricerca import (
@@ -26,7 +26,7 @@ def chiedi(domanda, converti):
     """Ripete la domanda finche' converti(risposta) non va a buon fine."""
     while True:
         try:
-            return converti(input(domanda).strip())
+            return converti(leggi(domanda).strip())
         except ValueError as e:
             print(f"  {e}")
 
@@ -73,7 +73,7 @@ def chiedi_citta(luoghi, ruolo, default=None):
         domanda = t("citta_domanda", ruolo=ruolo, Ruolo=ruolo[0].upper() + ruolo[1:],
                     numero=f" {i}" if n == "2" else "")
         while True:
-            c = scegli_luogo(luoghi, input(domanda).strip())
+            c = scegli_luogo(luoghi, leggi(domanda).strip())
             # Le ricerche usano il nome della citta': due nomi uguali si confonderebbero.
             if c and any(x["nome"] == c["nome"] for x in elenco):
                 print(t("citta_doppia", nome=c["nome"]))
@@ -270,6 +270,8 @@ def parametri_da_file(percorso, lingua_scelta=None):
             "max_scali": None if f.get("max_scali") is None else int(f["max_scali"]),
             "top": int(f.get("top", 5)), "frequenza_minuti": int(f.get("frequenza_minuti", 30)),
             "valuta": valuta(str(f.get("valuta") or "")),
+            "avvisa_sotto": f.get("avvisa_sotto"),
+            "telegram": f.get("telegram", True),
             "lingua": lingua.LINGUA,
         }
     except KeyError as e:
@@ -292,6 +294,11 @@ def parametri_da_file(percorso, lingua_scelta=None):
         raise ValueError(t("durata_non_valida"))
     if p["top"] < 1 or p["frequenza_minuti"] < 1 or (p["max_scali"] or 0) < 0:
         raise ValueError(t("valori_non_validi"))
+    if not isinstance(p["telegram"], bool):
+        raise ValueError(t("telegram_non_valido"))
+    obiettivo = p["avvisa_sotto"]
+    if obiettivo is not None and (isinstance(obiettivo, bool) or not isinstance(obiettivo, int) or obiettivo < 1):
+        raise ValueError(t("obiettivo_non_valido"))
     if lingua_scelta is not None and f.get("lingua") != lingua_scelta:
         f = {"lingua": lingua_scelta, **{k: v for k, v in f.items() if k != "lingua"}}
         percorso.write_text(json.dumps(f, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
@@ -317,7 +324,10 @@ def stampa_riassunto(p):
             ritorno_da=etichetta(p["ritorno"]["da"]), ritorno_a=etichetta(p["ritorno"]["a"]),
             inizio=f"{date.fromisoformat(p['inizio']):%d/%m/%Y}", fine=f"{date.fromisoformat(p['fine']):%d/%m/%Y}",
             durata=testo_durata(p), scali=testo_scali(p["max_scali"]),
-            top=p["top"], frequenza=p["frequenza_minuti"], valuta=p.get("valuta", "EUR")))
+            top=p["top"], frequenza=p["frequenza_minuti"], valuta=p.get("valuta", "EUR"),
+            obiettivo=(t("riassunto_obiettivo", prezzo=p["avvisa_sotto"], valuta=p.get("valuta", "EUR"))
+                       if p.get("avvisa_sotto") else "")
+            + ("" if p.get("telegram", True) else t("riassunto_privata"))))
 
 
 def chiedi_parametri():
@@ -378,6 +388,9 @@ def chiedi_parametri():
     p["max_scali"] = chiedi(t("scali_domanda"), scali)
     p["top"] = chiedi(t("top_domanda"), intero(1))
     p["frequenza_minuti"] = chiedi(t("frequenza_domanda"), intero(1))
+    avvisi = chiedi(t("avvisi_domanda"), scelta("", "1", "2", "3"))
+    p["telegram"] = avvisi != "3"  # 3 = ricerca privata: niente messaggi al bot
+    p["avvisa_sotto"] = chiedi(t("obiettivo_domanda"), intero(1)) if avvisi == "2" else None
     p["lingua"] = lingua.LINGUA
     return p
 

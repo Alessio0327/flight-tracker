@@ -4,6 +4,7 @@ barra di avanzamento e conto alla rovescia.
 
 import html
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -17,6 +18,23 @@ from ricerca import (
     proposte_verificate,
 )
 import lingua
+
+
+# Colore delle risposte dell'utente: verde (ANSI a 256 colori), solo sul terminale.
+# NO_COLOR (https://no-color.org) lo disattiva.
+COLORE_RISPOSTE = "\033[38;5;77m"
+RESET = "\033[0m"
+
+
+def leggi(domanda):
+    """input() con la risposta dell'utente colorata, se l'output e' un terminale."""
+    if not sys.stdout.isatty() or os.environ.get("NO_COLOR"):
+        return input(domanda)
+    try:
+        return input(domanda + COLORE_RISPOSTE)
+    finally:
+        # anche con Ctrl+C o fine input: il resto del terminale non deve restare colorato
+        print(RESET, end="", flush=True)
 
 
 def testo_scali(n):
@@ -93,6 +111,19 @@ def notifica(titolo, testo):
         subprocess.run(["osascript", "-e", script], check=False)
 
 
+def testo_obiettivo(p, top):
+    """Riga del prezzo obiettivo ("" se non impostato): quanto manca, o raggiunto."""
+    obiettivo = p.get("avvisa_sotto")
+    if not obiettivo:
+        return ""
+    if not top:
+        return t("obiettivo_riga_senza_prezzo", obiettivo=obiettivo)
+    prezzo = top[0]["prezzo"]
+    if prezzo <= obiettivo:
+        return t("obiettivo_riga_raggiunto", obiettivo=obiettivo, prezzo=prezzo)
+    return t("obiettivo_riga", obiettivo=obiettivo, prezzo=prezzo, mancano=prezzo - obiettivo)
+
+
 def testo_copertura(cop):
     """Copertura della scansione su una riga, per terminale e top.txt."""
     testo = (t("copertura", stimate=cop["stimate"], verificate=cop["verificate"], totale=cop["totale"])
@@ -106,7 +137,7 @@ def testo_copertura(cop):
     return testo
 
 
-def intestazione_telegram(p, titolo, cop):
+def intestazione_telegram(p, titolo, cop, top=None):
     """Titolo, riassunto dei parametri e copertura della scansione, in HTML per Telegram."""
     e = html.escape
     giorno = lambda s: f"{date.fromisoformat(s):%d/%m/%Y}"
@@ -126,6 +157,8 @@ def intestazione_telegram(p, titolo, cop):
                        ora=f"{bandiera(cop['paese'])} {cop['paese']}"))
     elif cop.get("paese"):
         righe.append(t("tg_posizione", bandiera=bandiera(cop["paese"]), paese=cop["paese"]))
+    if testo_obiettivo(p, top):
+        righe.append(testo_obiettivo(p, top))
     righe.append("")
     if cop["verificate"] == cop["totale"]:
         righe.append(t("tg_completa", verificate=cop["verificate"], totale=cop["totale"]))
@@ -239,7 +272,7 @@ def messaggio_telegram(p, top, prezzi, cop, confronto, titolo=None):
     """Top N in HTML per Telegram, con link cliccabili a Google Flights."""
     e = html.escape
     gm = lambda s: f"{date.fromisoformat(s):%d/%m}"
-    righe = [intestazione_telegram(p, titolo or t("tg_nuovo_minimo"), cop), "", f"🏆 <b>Top {len(top)}</b>"]
+    righe = [intestazione_telegram(p, titolo or t("tg_nuovo_minimo"), cop, top), "", f"🏆 <b>Top {len(top)}</b>"]
     for i, x in enumerate(top, 1):
         date_txt = f"   📆 {gm(x['andata'])} → {gm(x['ritorno'])} {durata_viaggio(x)}"
         if x["tipo"] == "ar":

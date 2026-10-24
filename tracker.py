@@ -57,7 +57,8 @@ from blocco import blocca
 from google_flights import Bloccato, nuovo_client
 from interfaccia import (
     Barra, breve_posizione, confronto_varianti, conto_alla_rovescia, dettaglio, messaggio_telegram,
-    nome_tratta, orari, riassunto, suggerimento, testo_copertura, testo_durata, testo_posizione, testo_scali,
+    nome_tratta, orari, riassunto, suggerimento, testo_copertura, testo_durata, testo_obiettivo, testo_posizione,
+    testo_scali,
 )
 from lingua import t
 from parametri import chiedi_lingua, chiedi_parametri, parametri_da_file, stampa_riassunto
@@ -72,7 +73,7 @@ import ricerca
 import telegram_bot
 
 
-VERSIONE = "1.4.0"  # da aggiornare insieme a CHANGELOG.md a ogni nuova versione
+VERSIONE = "1.5.0"  # da aggiornare insieme a CHANGELOG.md a ogni nuova versione
 BASE = Path(__file__).resolve().parent
 # Oltre queste dimensioni il file diventa <nome>.1 (si tiene una sola copia precedente).
 MAX_BYTE_LOG = 1_000_000
@@ -271,6 +272,7 @@ def giro(p, cartella, client, ritmo, primo=False, posizione_prima=None):
           scali=testo_scali(p["max_scali"]), adesso=adesso),
         copertura[0].upper() + copertura[1:],
         testo_posizione(pos),
+        *([testo_obiettivo(p, top)] if testo_obiettivo(p, top) else []),
         "",
     ]
     for i, x in enumerate(top, 1):
@@ -287,12 +289,23 @@ def giro(p, cartella, client, ritmo, primo=False, posizione_prima=None):
     print("\n" + "=" * 80 + "\n" + testo)
 
     nuovo = top and (record_prima is None or top[0]["prezzo"] < record_prima)
+    # Con un prezzo obiettivo si avvisa solo quando il nuovo minimo e' sotto (o uguale).
+    obiettivo = p.get("avvisa_sotto")
+    if nuovo and obiettivo and top[0]["prezzo"] > obiettivo:
+        nuovo = False
     if nuovo:
         interfaccia.notifica(t("notifica_titolo", tratta=tratta), riassunto(top[0]))
     # Al primo giro di ogni avvio la top completa arriva comunque, anche se i prezzi
     # vengono da un'esecuzione precedente.
+    sotto_obiettivo = bool(top and obiettivo and top[0]["prezzo"] <= obiettivo)
+    if primo and top and obiettivo and not sotto_obiettivo:
+        # Avvio con un obiettivo non ancora raggiunto: una riga sola, senza la top.
+        return bloccato, t("tg_avviato_breve", tratta=html.escape(tratta), obiettivo=testo_obiettivo(p, top)), pos
     if nuovo or (primo and top):
-        titolo = t("tg_nuovo_minimo") if nuovo else t("tg_avviato")
+        if sotto_obiettivo:
+            titolo = t("tg_obiettivo_raggiunto", prezzo=top[0]["prezzo"], obiettivo=obiettivo)
+        else:
+            titolo = t("tg_nuovo_minimo") if nuovo else t("tg_avviato")
         return bloccato, messaggio_telegram(p, top, prezzi, cop, confronto + ([""] + consiglio if consiglio else []),
                                             titolo), pos
     # Nessun nuovo minimo: niente messaggio. Un blocco di Google arriva comunque come
@@ -338,6 +351,14 @@ def avvisa_ricerche_concluse(data):
         print(t("ricerche_concluse", n=len(concluse), esempio=concluse[0].relative_to(data.parent)))
 
 
+def invio_telegram(p):
+    """Funzione per i messaggi Telegram di questa ricerca: con una ricerca privata
+    ("telegram": false) non manda niente al bot e ai suoi iscritti."""
+    if p.get("telegram", True):
+        return telegram_bot.invia
+    return lambda testo: None
+
+
 def prepara_terminale():
     """Su Windows: UTF-8 per emoji e accenti, e sequenze ANSI per la barra su una riga."""
     if sys.platform == "win32":
@@ -366,12 +387,16 @@ def main():
     if "--setup-telegram" in sys.argv:
         telegram_bot.setup()
         return
-    if not telegram_bot.configurato():
-        print(t("telegram_non_attivo"))
     avvisa_ricerche_concluse(BASE / "data")
-    telegram_bot.ascolta_in_background()  # /start e /stop di chiunque apra il bot
     if not file_parametri:
         p = chiedi_parametri()
+    invia = invio_telegram(p)
+    if not p.get("telegram", True):
+        print(t("telegram_disattivato"))
+    else:
+        if not telegram_bot.configurato():
+            print(t("telegram_non_attivo"))
+        telegram_bot.ascolta_in_background()  # /start e /stop di chiunque apra il bot
     lingua.imposta_valuta(p.get("valuta", "EUR"))
     # Per l'A/R sulla stessa citta' il nome e' quello delle versioni precedenti, cosi'
     # le istanze gia' avviate riprendono i loro dati.
@@ -427,16 +452,16 @@ def main():
             if avviso:
                 stato = ritmo.descrizione(p["frequenza_minuti"])
                 print(t("ritmo_terminale", avviso=re.sub("<[^>]+>", "", avviso), stato=stato))
-                telegram_bot.invia(f"{avviso}\n{html.escape(tratta)}\n{t('ritmo_ora', stato=stato)}\n{prossimo}")
+                invia(f"{avviso}\n{html.escape(tratta)}\n{t('ritmo_ora', stato=stato)}\n{prossimo}")
             if messaggio:
-                telegram_bot.invia(f"{messaggio}\n\n{prossimo}")
+                invia(f"{messaggio}\n\n{prossimo}")
             conto_alla_rovescia(attesa)
     except KeyboardInterrupt:
         print(t("fermato"))
-        telegram_bot.invia(t("tg_fermato_utente", tratta=html.escape(tratta)))
+        invia(t("tg_fermato_utente", tratta=html.escape(tratta)))
     except Exception as e:
         errore = html.escape(f"{type(e).__name__}: {e}")[:500]
-        telegram_bot.invia(t("tg_fermato_errore", tratta=html.escape(tratta), errore=errore))
+        invia(t("tg_fermato_errore", tratta=html.escape(tratta), errore=errore))
         raise
 
 

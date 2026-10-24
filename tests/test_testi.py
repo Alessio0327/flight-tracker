@@ -3,6 +3,8 @@
 import google_flights
 import interfaccia
 import ricerca
+import pytest
+
 import tracker
 from conftest import OSAKA, ROMA, viaggio, tra
 
@@ -183,3 +185,27 @@ def test_notifica_macos_con_accenti(monkeypatch):
     interfaccia.notifica("Volo Città", "656 EUR → Osaka")
     script = chiamate[0][2]
     assert "Città" in script and "→" in script and "\\u" not in script
+
+
+def test_risposte_colorate_solo_sul_terminale(monkeypatch, capsys):
+    domande = []
+    monkeypatch.setattr("builtins.input", lambda d: domande.append(d) or "1")
+    monkeypatch.delenv("NO_COLOR", raising=False)
+    monkeypatch.setattr(interfaccia.sys.stdout, "isatty", lambda: True)
+    assert interfaccia.leggi("Domanda: ") == "1"
+    assert domande[-1] == "Domanda: " + interfaccia.COLORE_RISPOSTE
+    assert capsys.readouterr().out.endswith(interfaccia.RESET)
+    monkeypatch.setenv("NO_COLOR", "1")
+    interfaccia.leggi("Domanda: ")
+    assert domande[-1] == "Domanda: "
+
+
+def test_colore_spento_anche_con_ctrl_c(monkeypatch, capsys):
+    def interrompi(d):
+        raise KeyboardInterrupt
+    monkeypatch.setattr("builtins.input", interrompi)
+    monkeypatch.delenv("NO_COLOR", raising=False)
+    monkeypatch.setattr(interfaccia.sys.stdout, "isatty", lambda: True)
+    with pytest.raises(KeyboardInterrupt):
+        interfaccia.leggi("Domanda: ")
+    assert capsys.readouterr().out.endswith(interfaccia.RESET)

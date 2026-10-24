@@ -20,6 +20,7 @@ from contextlib import contextmanager
 from pathlib import Path
 
 from blocco import blocca
+from interfaccia import leggi
 from lingua import t
 
 CONFIG = Path(__file__).resolve().parent / "telegram.json"
@@ -152,7 +153,7 @@ def setup():
     print(t("setup_passo_1"))
     print(t("setup_passo_2"))
     while True:
-        token = input(t("setup_token")).strip()
+        token = leggi(t("setup_token")).strip()
         try:
             bot = _chiama(token, "getMe")
             break

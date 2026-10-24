@@ -87,14 +87,19 @@ TESTI = {
     "valuta_domanda": ("Valuta dei prezzi (es. EUR, USD, GBP; Invio = EUR): ",
                        "Price currency (e.g. EUR, USD, GBP; Enter = EUR): "),
     "frequenza_domanda": ("Frequenza aggiornamento (minuti): ", "Update frequency (minutes): "),
+    "avvisi_domanda": ("Avvisi Telegram: [1] a ogni nuovo prezzo minimo  [2] solo sotto un prezzo che scegli  "
+                       "[3] nessuno, ricerca privata (Invio = 1): ",
+                       "Telegram alerts: [1] at every new lowest price  [2] only below a price you choose  "
+                       "[3] none, private search (Enter = 1): "),
+    "obiettivo_domanda": ("Prezzo obiettivo ({valuta}): ", "Target price ({valuta}): "),
     "percorso_domanda": ("Percorso del file JSON: ", "JSON file path: "),
     "riassunto_file": (
         "  Andata {andata_da} -> {andata_a}\n  Ritorno {ritorno_da} -> {ritorno_a}\n"
         "  Partenza dal {inizio} al {fine}, durata {durata}, {scali}, top {top}, ogni {frequenza} min, "
-        "prezzi in {valuta}",
+        "prezzi in {valuta}{obiettivo}",
         "  Outbound {andata_da} -> {andata_a}\n  Return {ritorno_da} -> {ritorno_a}\n"
         "  Departure from {inizio} to {fine}, trip length {durata}, {scali}, top {top}, every {frequenza} min, "
-        "prices in {valuta}",
+        "prices in {valuta}{obiettivo}",
     ),
 
     # --- errori di input -------------------------------------------------------
@@ -122,6 +127,8 @@ TESTI = {
     "file_lingua_aggiornata": ("  Lingua del file aggiornata: {file}", "  File language updated: {file}"),
     "formato_valuta": ("serve un codice di 3 lettere, es. EUR, USD, GBP", "a 3-letter code is needed, e.g. EUR, USD, GBP"),
     "valuta_non_valida": ('valuta: serve un codice di 3 lettere, es. "EUR"', 'valuta: a 3-letter code is needed, e.g. "EUR"'),
+    "obiettivo_non_valido": ("avvisa_sotto: serve un prezzo intero >= 1, oppure null",
+                             "avvisa_sotto: a whole price >= 1 is needed, or null"),
     "lingua_non_valida": ('lingua: usa "it" o "en"', 'lingua: use "it" or "en"'),
 
     # --- controllo del periodo -------------------------------------------------
@@ -287,6 +294,19 @@ TESTI = {
                      "💡 Leaving on {giorno} (outside your period) {risparmio}: {testo}"),
 
     # --- Telegram --------------------------------------------------------------
+    "riassunto_privata": (", senza Telegram", ", no Telegram"),
+    "telegram_disattivato": ("Telegram disattivato per questa ricerca: nessun messaggio al bot e ai suoi iscritti.\n",
+                             "Telegram is off for this search: no messages to the bot and its subscribers.\n"),
+    "telegram_non_valido": ("telegram: usa true o false", "telegram: use true or false"),
+    "riassunto_obiettivo": (", avviso sotto {prezzo} {valuta}", ", alert below {prezzo} {valuta}"),
+    "tg_obiettivo_raggiunto": ("🎯 <b>Sotto il tuo obiettivo</b>: {prezzo} {valuta} (obiettivo {obiettivo} {valuta})",
+                               "🎯 <b>Below your target</b>: {prezzo} {valuta} (target {obiettivo} {valuta})"),
+    "obiettivo_riga": ("🎯 Obiettivo {obiettivo} {valuta} · ora {prezzo} {valuta} (mancano {mancano} {valuta})",
+                       "🎯 Target {obiettivo} {valuta} · now {prezzo} {valuta} ({mancano} {valuta} to go)"),
+    "obiettivo_riga_raggiunto": ("🎯 Obiettivo {obiettivo} {valuta} · ora {prezzo} {valuta}: raggiunto",
+                                 "🎯 Target {obiettivo} {valuta} · now {prezzo} {valuta}: reached"),
+    "obiettivo_riga_senza_prezzo": ("🎯 Obiettivo {obiettivo} {valuta}", "🎯 Target {obiettivo} {valuta}"),
+    "tg_avviato_breve": ("🚀 <b>Tracker avviato</b> · {tratta}\n{obiettivo}", "🚀 <b>Tracker started</b> · {tratta}\n{obiettivo}"),
     "tg_nuovo_minimo": ("✈️ <b>Nuovo prezzo minimo</b>", "✈️ <b>New lowest price</b>"),
     "tg_avviato": ("🚀 <b>Tracker avviato</b>: prezzi migliori attuali", "🚀 <b>Tracker started</b>: current best prices"),
     "tg_partenza": ("📅 Partenza dal {inizio} al {fine}", "📅 Departure from {inizio} to {fine}"),
