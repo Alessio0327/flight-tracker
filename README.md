@@ -18,6 +18,14 @@ often as you choose) until you stop it.
 
 ## Why
 
+Since I love traveling and try to do it as often as possible, I've spent hours trying to find
+the perfect combination of flights to get the best fares.
+
+At some point, I thought: why spend so much time searching when I could build a tool to do it
+for me?
+
+And here it is!
+
 Example: you want to go to the United States in May, for 10 to 14 days. Landing in New
 York or Boston are both fine, and maybe you would fly home from the other city.
 

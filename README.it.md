@@ -18,6 +18,14 @@ frequenza che scegli) finché non lo fermi.
 
 ## Perché
 
+Amo viaggiare e cerco di farlo il più spesso possibile. Per questo, ho passato ore a cercare
+la combinazione perfetta di voli per trovare le tariffe più convenienti.
+
+A un certo punto mi sono chiesto: perché perdere così tanto tempo a cercare, quando potrei
+creare uno strumento che lo faccia al posto mio?
+
+Ed eccolo qui!
+
 Esempio: vuoi andare negli Stati Uniti a maggio, per 10-14 giorni. Ti va bene arrivare
 a New York o a Boston, e magari tornare dall'altra città.
 
